@@ -167,6 +167,8 @@ namespace {
           switch (event) {
             case AudioPipe::CONNECT_SUCCESS:
               switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "connection successful\n");
+              switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "metaData %s\n", tech_pvt->initialMetadata.c_str());
+              
               tech_pvt->responseHandler(session, EVENT_CONNECT_SUCCESS, NULL);
               if (strlen(tech_pvt->initialMetadata) > 0) {
                 switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "sending initial metadata %s\n", tech_pvt->initialMetadata);
@@ -471,6 +473,7 @@ extern "C" {
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "(%u) fork_session_cleanup: connection closed\n", id);
     return SWITCH_STATUS_SUCCESS;
   }
+
 
   switch_status_t fork_session_send_text(switch_core_session_t *session, char *bugname, char* text) {
     switch_channel_t *channel = switch_core_session_get_channel(session);

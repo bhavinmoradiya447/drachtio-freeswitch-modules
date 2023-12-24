@@ -93,14 +93,19 @@ private:
   static int lws_callback(struct lws *wsi, enum lws_callback_reasons reason, void *user, void *in, size_t len); 
   static unsigned int nchild;
   static struct lws_context *contexts[];
+  static struct lws *glb_wsi;
+
   static unsigned int numContexts;
   static std::string protocolName;
   static std::mutex mutex_connects;
   static std::mutex mutex_disconnects;
   static std::mutex mutex_writes;
+  static std::mutex mutex_active_legs;
+  static std::mutex mutex_connection;
   static std::list<AudioPipe*> pendingConnects;
   static std::list<AudioPipe*> pendingDisconnects;
   static std::list<AudioPipe*> pendingWrites;
+  static std::list<AudioPipe*> activeLegs;
   static log_emit_function logger;
 
   static std::mutex mapMutex;

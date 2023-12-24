@@ -92,25 +92,34 @@ int AudioPipe::lws_callback(struct lws *wsi,
 
     case LWS_CALLBACK_CLIENT_ESTABLISHED:
       {
-        AudioPipe* ap = findAndRemovePendingConnect(wsi);
+        std::lock_guard<std::mutex> guard(mutex_active_legs);
+        for (auto it = activeLegs.begin(); it != activeLegs.end(); ++it) {
+        AudioPipe* ap = *it;
         if (ap) {
           *ppAp = ap;
           ap->m_vhd = vhd;
+          ap->m_wsi = wsi;
           ap->m_state = LWS_CLIENT_CONNECTED;
           ap->m_callback(ap->m_uuid.c_str(), ap->m_bugname.c_str(), AudioPipe::CONNECT_SUCCESS, NULL);
         }
         else {
           lwsl_err("AudioPipe::lws_service_thread LWS_CALLBACK_CLIENT_ESTABLISHED %s unable to find wsi %p..\n", ap->m_uuid.c_str(), wsi); 
         }
-      }      
+      }    
+      }  
       break;
     case LWS_CALLBACK_CLIENT_CLOSED:
       {
-        AudioPipe* ap = *ppAp;
+        std::lock_guard<std::mutex> guard(mutex_active_legs);
+        for (auto it = activeLegs.begin(); it != activeLegs.end(); ++it) {
+        AudioPipe* ap = *it;
         if (!ap) {
           lwsl_err("AudioPipe::lws_service_thread LWS_CALLBACK_CLIENT_CLOSED %s unable to find wsi %p..\n", ap->m_uuid.c_str(), wsi); 
-          return 0;
+          //return 0;
+          continue;
         }
+        ap->m_vhd = vhd;
+        ap->m_wsi = wsi;
         if (ap->m_state == LWS_CLIENT_DISCONNECTING) {
           // closed by us
           ap->m_callback(ap->m_uuid.c_str(), ap->m_bugname.c_str(), AudioPipe::CONNECTION_CLOSED_GRACEFULLY, NULL);
@@ -124,9 +133,11 @@ int AudioPipe::lws_callback(struct lws *wsi,
 
         //NB: after receiving any of the events above, any holder of a 
         //pointer or reference to this object must treat is as no longer valid
-
-        *ppAp = NULL;
         delete ap;
+        
+        }
+        *ppAp = NULL;
+        
       }
       break;
 
@@ -191,18 +202,32 @@ int AudioPipe::lws_callback(struct lws *wsi,
 
     case LWS_CALLBACK_CLIENT_WRITEABLE:
       {
-        AudioPipe* ap = *ppAp;
+        std::list<AudioPipe* > toRemove;
+
+        std::lock_guard<std::mutex> guard(mutex_active_legs);
+        for (auto it = activeLegs.begin(); it != activeLegs.end(); ++it) {
+        AudioPipe* ap = *it;
         if (!ap) {
           lwsl_err("AudioPipe::lws_service_thread LWS_CALLBACK_CLIENT_WRITEABLE %s unable to find wsi %p..\n", ap->m_uuid.c_str(), wsi); 
-          return 0;
+          //return 0;
+          continue;
         }
+        ap->m_vhd = vhd;
 
+        if(ap->m_state == LWS_CLIENT_CONNECTING){
+          ap->m_state = LWS_CLIENT_CONNECTED;
+          ap->m_wsi = wsi;
+          ap->m_callback(ap->m_uuid.c_str(), ap->m_bugname.c_str(), AudioPipe::CONNECT_SUCCESS, NULL); 
+          continue;
+        }
+          
         // check for graceful close - send a zero length binary frame
         if (ap->isGracefulShutdown()) {
           lwsl_notice("%s graceful shutdown - sending zero length binary frame to flush any final responses\n", ap->m_uuid.c_str());
           std::lock_guard<std::mutex> lk(ap->m_audio_mutex);
           int sent = lws_write(wsi, (unsigned char *) ap->m_audio_buffer + LWS_PRE, 0, LWS_WRITE_BINARY);
-          return 0;
+          //return 0;
+          continue;
         }
 
         // check for text frames to send
@@ -215,20 +240,25 @@ int AudioPipe::lws_callback(struct lws *wsi,
             int m = lws_write(wsi, buf + LWS_PRE, n, LWS_WRITE_TEXT);
             ap->m_metadata.clear();
             if (m < n) {
-              return -1;
+              //return -1;
+              continue;
             }
 
             // there may be audio data, but only one write per writeable event
             // get it next time
             lws_callback_on_writable(wsi);
 
-            return 0;
+            //return 0;
+            continue;
           }
         }
 
         if (ap->m_state == LWS_CLIENT_DISCONNECTING) {
-          lws_close_reason(wsi, LWS_CLOSE_STATUS_NORMAL, NULL, 0);
-          return -1;
+          //lws_close_reason(wsi, LWS_CLOSE_STATUS_NORMAL, NULL, 0);
+          //return -1;
+          //return 0;
+          toRemove.push_back(ap);
+          continue;
         }
 
         // check for audio packets
@@ -244,8 +274,10 @@ int AudioPipe::lws_callback(struct lws *wsi,
             ap->m_audio_buffer_write_offset = LWS_PRE;
           }
         }
-
-        return 0;
+      }
+      return 0;
+       for (auto it = toRemove.begin(); it != toRemove.end(); ++it)
+         activeLegs.remove(*it);
       }
       break;
 
@@ -270,15 +302,23 @@ struct lws_context *AudioPipe::contexts[] = {
   nullptr, nullptr, nullptr, nullptr, nullptr,
   nullptr, nullptr, nullptr, nullptr, nullptr
 };
+
+struct lws *AudioPipe::glb_wsi;
+
 unsigned int AudioPipe::numContexts = 0;
 unsigned int AudioPipe::nchild = 0;
 std::string AudioPipe::protocolName;
 std::mutex AudioPipe::mutex_connects;
 std::mutex AudioPipe::mutex_disconnects;
 std::mutex AudioPipe::mutex_writes;
+std::mutex AudioPipe::mutex_active_legs;
+std::mutex AudioPipe::mutex_connection;
+
 std::list<AudioPipe*> AudioPipe::pendingConnects;
 std::list<AudioPipe*> AudioPipe::pendingDisconnects;
 std::list<AudioPipe*> AudioPipe::pendingWrites;
+std::list<AudioPipe*> AudioPipe::activeLegs;
+
 AudioPipe::log_emit_function AudioPipe::logger;
 std::mutex AudioPipe::mapMutex;
 std::unordered_map<std::thread::id, bool> AudioPipe::stopFlags;
@@ -463,6 +503,10 @@ void AudioPipe::initialize(const char* protocol, unsigned int nThreads, int logl
 
 bool AudioPipe::deinitialize() {
   lwsl_notice("AudioPipe::deinitialize\n"); 
+  std::lock_guard<std::mutex> guard(mutex_connection);
+  if (glb_wsi != nullptr){
+  lws_close_reason(glb_wsi, LWS_CLOSE_STATUS_NORMAL, NULL, 0);
+  }
   std::lock_guard<std::mutex> lock(mapMutex);
   if (!threadIds.empty()) {
       std::thread::id id = threadIds.front();
@@ -510,7 +554,15 @@ AudioPipe::~AudioPipe() {
 }
 
 void AudioPipe::connect(void) {
-  addPendingConnect(this);
+  std::lock_guard<std::mutex> guard(mutex_connection);
+  if (glb_wsi == nullptr){
+    addPendingConnect(this);
+  }else{
+      m_state = LWS_CLIENT_CONNECTING;
+      m_vhd = nullptr;
+      activeLegs.push_back(this);      
+  }
+  
 }
 
 bool AudioPipe::connect_client(struct lws_per_vhost_data *vhd) {
@@ -533,9 +585,14 @@ bool AudioPipe::connect_client(struct lws_per_vhost_data *vhd) {
   m_state = LWS_CLIENT_CONNECTING;
   m_vhd = vhd;
 
-  m_wsi = lws_client_connect_via_info(&i);
-  lwsl_notice("%s attempting connection, wsi is %p\n", m_uuid.c_str(), m_wsi);
-
+  std::lock_guard<std::mutex> guard(mutex_connection);
+  if (glb_wsi == nullptr){
+    glb_wsi = lws_client_connect_via_info(&i);
+    lwsl_notice("%s attempting connection, wsi is %p\n", m_uuid.c_str(), m_wsi);
+  }
+  m_wsi = glb_wsi;
+//  std::lock_guard<std::mutex> guard(mutex_active_legs);
+  activeLegs.push_back(this);
   return nullptr != m_wsi;
 }
 
