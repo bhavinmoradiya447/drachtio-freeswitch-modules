@@ -10,6 +10,7 @@
 //static int mod_running = 0;
 static void *context ;
 static void *responder ;
+static pthread_mutex_t lock; 
 
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_audio_fork_shutdown);
 SWITCH_MODULE_RUNTIME_FUNCTION(mod_audio_fork_runtime);
@@ -53,13 +54,15 @@ static switch_bool_t capture_callback(switch_media_bug_t *bug, void *user_data, 
 			frame.data = data;
 			frame.buflen = SWITCH_RECOMMENDED_BUFFER_SIZE;
 
-			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Got SWITCH_ABC_TYPE_READ for bug\n");
+			//switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Got SWITCH_ABC_TYPE_READ for bug\n");
 			while (switch_core_media_bug_read(bug, &frame, SWITCH_TRUE) == SWITCH_STATUS_SUCCESS) {
 				//switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Reading Frame for with datalen %d\n", frame.datalen);
 				  // zstr_send (push, (char*)frame.data);
+				  pthread_mutex_lock(&lock); 
 				  zmq_send (responder, frame.data, frame.datalen, 0);
+				  pthread_mutex_unlock(&lock); 
 			}
-			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Exiting SWITCH_ABC_TYPE_READ for bug \n");
+			//switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Exiting SWITCH_ABC_TYPE_READ for bug \n");
 		}
 		break;
 
@@ -341,7 +344,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_audio_fork_load)
     context = zmq_ctx_new ();
     responder = zmq_socket (context, ZMQ_PUB);
     zmq_bind (responder, "tcp://*:9090");
-	
+	pthread_mutex_init(&lock, NULL);
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "mod_audio_fork API successfully loaded\n");
 
 	/* indicate that the module should continue to be loaded */
