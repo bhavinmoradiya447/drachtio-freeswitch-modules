@@ -17,6 +17,8 @@
 #include "parser.hpp"
 #include "mod_audio_fork.h"
 #include "audio_pipe.hpp"
+#include <zmq.h>
+
 
 #define RTP_PACKETIZATION_PERIOD 20
 #define FRAME_SIZE_8000  320 /*which means each 20ms frame as 320 bytes at 8 khz (1 channel only)*/
@@ -30,6 +32,10 @@ namespace {
   static unsigned int nServiceThreads = std::max(1, std::min(requestedNumServiceThreads ? ::atoi(requestedNumServiceThreads) : 1, 5));
   static unsigned int idxCallCount = 0;
   static uint32_t playCount = 0;
+
+  static void *context ;
+  static void *responder ;
+  static pthread_mutex_t lock; 
 
   void processIncomingMessage(private_t* tech_pvt, switch_core_session_t* session, const char* message) {
     std::string msg = message;
@@ -237,7 +243,7 @@ namespace {
     strncpy(tech_pvt->bugname, bugname, MAX_BUG_LEN);
     if (metadata) strncpy(tech_pvt->initialMetadata, metadata, MAX_METADATA_LEN);
     
-    size_t buflen = LWS_PRE + (FRAME_SIZE_8000 * desiredSampling / 8000 * channels * 1000 / RTP_PACKETIZATION_PERIOD * nAudioBufferSecs);
+/*    size_t buflen = LWS_PRE + (FRAME_SIZE_8000 * desiredSampling / 8000 * channels * 1000 / RTP_PACKETIZATION_PERIOD * nAudioBufferSecs);
 
     AudioPipe* ap = new AudioPipe(tech_pvt->sessionId, host, port, path, sslFlags, 
       buflen, read_impl.decoded_bytes_per_packet, username, password, bugname, eventCallback);
@@ -247,7 +253,7 @@ namespace {
     }
 
     tech_pvt->pAudioPipe = static_cast<void *>(ap);
-
+*/
     switch_mutex_init(&tech_pvt->mutex, SWITCH_MUTEX_NESTED, switch_core_session_get_pool(session));
 
     if (desiredSampling != sampling) {
@@ -375,7 +381,12 @@ extern "C" {
  
     int logs = LLL_ERR | LLL_WARN | LLL_NOTICE ;
      //LLL_INFO | LLL_PARSER | LLL_HEADER | LLL_EXT | LLL_CLIENT  | LLL_LATENCY | LLL_DEBUG ;
-    AudioPipe::initialize(mySubProtocolName, nServiceThreads, logs, lws_logger);
+   // AudioPipe::initialize(mySubProtocolName, nServiceThreads, logs, lws_logger);
+   context = zmq_ctx_new ();
+   responder = zmq_socket (context, ZMQ_PUB);
+   zmq_bind (responder, "tcp://*:9090");
+   pthread_mutex_init(&lock, NULL);
+
    return SWITCH_STATUS_SUCCESS;
   }
 
@@ -532,87 +543,33 @@ extern "C" {
     if (!tech_pvt || tech_pvt->audio_paused || tech_pvt->graceful_shutdown) return SWITCH_TRUE;
     
     if (switch_mutex_trylock(tech_pvt->mutex) == SWITCH_STATUS_SUCCESS) {
-      if (!tech_pvt->pAudioPipe) {
-        switch_mutex_unlock(tech_pvt->mutex);
-        return SWITCH_TRUE;
-      }
-      AudioPipe *pAudioPipe = static_cast<AudioPipe *>(tech_pvt->pAudioPipe);
-      if (pAudioPipe->getLwsState() != AudioPipe::LWS_CLIENT_CONNECTED) {
-        switch_mutex_unlock(tech_pvt->mutex);
-        return SWITCH_TRUE;
-      }
-
-      pAudioPipe->lockAudioBuffer();
-      size_t available = pAudioPipe->binarySpaceAvailable();
-      if (NULL == tech_pvt->resampler) {
-        switch_frame_t frame = { 0 };
-        frame.data = pAudioPipe->binaryWritePtr();
-        frame.buflen = available;
-        while (true) {
-
-          // check if buffer would be overwritten; dump packets if so
-          if (available < pAudioPipe->binaryMinSpace()) {
-            if (!tech_pvt->buffer_overrun_notified) {
-              tech_pvt->buffer_overrun_notified = 1;
-              tech_pvt->responseHandler(session, EVENT_BUFFER_OVERRUN, NULL);
-            }
-            switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "(%u) dropping packets!\n", 
-              tech_pvt->id);
-            pAudioPipe->binaryWritePtrResetToZero();
-
-            frame.data = pAudioPipe->binaryWritePtr();
-            frame.buflen = available = pAudioPipe->binarySpaceAvailable();
-          }
-
-          switch_status_t rv = switch_core_media_bug_read(bug, &frame, SWITCH_TRUE);
-          if (rv != SWITCH_STATUS_SUCCESS) break;
-          if (frame.datalen) {
-            pAudioPipe->binaryWritePtrAdd(frame.datalen);
-            frame.buflen = available = pAudioPipe->binarySpaceAvailable();
-            frame.data = pAudioPipe->binaryWritePtr();
-            dirty = true;
-          }
-        }
-      }
-      else {
+        //private_t* tech_pvt = (private_t *)  switch_core_media_bug_get_user_data(bug);
         uint8_t data[SWITCH_RECOMMENDED_BUFFER_SIZE];
         switch_frame_t frame = { 0 };
         frame.data = data;
         frame.buflen = SWITCH_RECOMMENDED_BUFFER_SIZE;
+
+        //switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Got SWITCH_ABC_TYPE_READ for bug\n");
         while (switch_core_media_bug_read(bug, &frame, SWITCH_TRUE) == SWITCH_STATUS_SUCCESS) {
-          if (frame.datalen) {
-            spx_uint32_t out_len = available >> 1;  // space for samples which are 2 bytes
-            spx_uint32_t in_len = frame.samples;
-
-            speex_resampler_process_interleaved_int(tech_pvt->resampler, 
-              (const spx_int16_t *) frame.data, 
-              (spx_uint32_t *) &in_len, 
-              (spx_int16_t *) ((char *) pAudioPipe->binaryWritePtr()),
-              &out_len);
-
-            if (out_len > 0) {
-              // bytes written = num samples * 2 * num channels
-              size_t bytes_written = out_len << tech_pvt->channels;
-              pAudioPipe->binaryWritePtrAdd(bytes_written);
-              available = pAudioPipe->binarySpaceAvailable();
-              dirty = true;
+            pthread_mutex_lock(&lock); 
+            std::ostringstream oss;
+            oss << "{\"call_leg_id\":\"" << tech_pvt->sessionId << "\",";
+            if (strlen(tech_pvt->initialMetadata) > 0) {
+              oss << "\"metadata\":\"" << tech_pvt->initialMetadata << "\",";
             }
-            if (available < pAudioPipe->binaryMinSpace()) {
-              if (!tech_pvt->buffer_overrun_notified) {
-                tech_pvt->buffer_overrun_notified = 1;
-                switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "(%u) dropping packets!\n", 
-                  tech_pvt->id);
-                tech_pvt->responseHandler(session, EVENT_BUFFER_OVERRUN, NULL);
-              }
-              break;
-            }
-          }
+
+            
+            oss << "\"audio_data\":\"" << drachtio::base64_encode((unsigned char const *) frame.data , frame.datalen) << "\"}";
+
+            std::string result = oss.str();
+            switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "data : %s\n", result.c_str);
+            zmq_send (responder, result.c_str(), result.length(), 0);
+            pthread_mutex_unlock(&lock); 
         }
-      }
-
-      pAudioPipe->unlockAudioBuffer();
+			//switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Exiting SWITCH_ABC_TYPE_READ for bug \n");
+		  }
       switch_mutex_unlock(tech_pvt->mutex);
-    }
+    
     return SWITCH_TRUE;
   }
 

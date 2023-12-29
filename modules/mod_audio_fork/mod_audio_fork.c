@@ -5,12 +5,8 @@
  */
 #include "mod_audio_fork.h"
 #include "lws_glue.h"
-#include <zmq.h>
 
 //static int mod_running = 0;
-static void *context ;
-static void *responder ;
-static pthread_mutex_t lock; 
 
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_audio_fork_shutdown);
 SWITCH_MODULE_RUNTIME_FUNCTION(mod_audio_fork_runtime);
@@ -18,7 +14,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_audio_fork_load);
 
 SWITCH_MODULE_DEFINITION(mod_audio_fork, mod_audio_fork_load, mod_audio_fork_shutdown, NULL /*mod_audio_fork_runtime*/);
 
-/*static void responseHandler(switch_core_session_t* session, const char * eventName, char * json) {
+static void responseHandler(switch_core_session_t* session, const char * eventName, char * json) {
 	switch_event_t *event;
 
 	switch_channel_t *channel = switch_core_session_get_channel(session);
@@ -27,7 +23,7 @@ SWITCH_MODULE_DEFINITION(mod_audio_fork, mod_audio_fork_load, mod_audio_fork_shu
 	switch_channel_event_set_data(channel, event);
 	if (json) switch_event_add_body(event, "%s", json);
 	switch_event_fire(&event);
-}*/
+}
 
 static switch_bool_t capture_callback(switch_media_bug_t *bug, void *user_data, switch_abc_type_t type)
 {
@@ -46,26 +42,8 @@ static switch_bool_t capture_callback(switch_media_bug_t *bug, void *user_data, 
 		break;
 	
 	case SWITCH_ABC_TYPE_READ:
-		//return fork_frame(session, bug);
-		{
-            //private_t* tech_pvt = (private_t *)  switch_core_media_bug_get_user_data(bug);
-     		uint8_t data[SWITCH_RECOMMENDED_BUFFER_SIZE];
-			switch_frame_t frame = { 0 };
-			frame.data = data;
-			frame.buflen = SWITCH_RECOMMENDED_BUFFER_SIZE;
-
-			//switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Got SWITCH_ABC_TYPE_READ for bug\n");
-			while (switch_core_media_bug_read(bug, &frame, SWITCH_TRUE) == SWITCH_STATUS_SUCCESS) {
-				//switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Reading Frame for with datalen %d\n", frame.datalen);
-				  // zstr_send (push, (char*)frame.data);
-				  pthread_mutex_lock(&lock); 
-				  zmq_send (responder, frame.data, frame.datalen, 0);
-				  pthread_mutex_unlock(&lock); 
-			}
-			//switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Exiting SWITCH_ABC_TYPE_READ for bug \n");
-		}
-		break;
-
+		return fork_frame(session, bug);
+		
 	case SWITCH_ABC_TYPE_WRITE:
 	default:
 		break;
@@ -87,10 +65,10 @@ static switch_status_t start_capture(switch_core_session_t *session,
 	switch_channel_t *channel = switch_core_session_get_channel(session);
 	switch_media_bug_t *bug;
 	switch_status_t status;
-	//switch_codec_t* read_codec;
+	switch_codec_t* read_codec;
 
 	void *pUserData = NULL;
-    //int channels = (flags & SMBF_STEREO) ? 2 : 1;
+    int channels = (flags & SMBF_STEREO) ? 2 : 1;
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, 
     "mod_audio_fork (%s): streaming %d sampling to %s path %s port %d tls: %s.\n", 
     bugname, sampling, host, path, port, sslFlags ? "yes" : "no");
@@ -100,7 +78,7 @@ static switch_status_t start_capture(switch_core_session_t *session,
 		return SWITCH_STATUS_FALSE;
 	}
 
-	//read_codec = switch_core_session_get_read_codec(session);
+	read_codec = switch_core_session_get_read_codec(session);
 
 	if (switch_channel_pre_answer(channel) != SWITCH_STATUS_SUCCESS) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "mod_audio_fork: channel must have reached pre-answer status before calling start!\n");
@@ -108,11 +86,11 @@ static switch_status_t start_capture(switch_core_session_t *session,
 	}
 
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "calling fork_session_init.\n");
-	/*if (SWITCH_STATUS_FALSE == fork_session_init(session, responseHandler, read_codec->implementation->actual_samples_per_second, 
+	if (SWITCH_STATUS_FALSE == fork_session_init(session, responseHandler, read_codec->implementation->actual_samples_per_second, 
 		host, port, path, sampling, sslFlags, channels, bugname, metadata, &pUserData)) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error initializing mod_audio_fork session.\n");
 		return SWITCH_STATUS_FALSE;
-	}*/
+	}
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "adding bug %s.\n", bugname);
 	if ((status = switch_core_media_bug_add(session, bugname, NULL, capture_callback, pUserData, 0, flags, &bug)) != SWITCH_STATUS_SUCCESS) {
 		return status;
@@ -341,10 +319,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_audio_fork_load)
 	switch_console_set_complete("add uuid_audio_fork stop");
 
 	fork_init();
-    context = zmq_ctx_new ();
-    responder = zmq_socket (context, ZMQ_PUB);
-    zmq_bind (responder, "tcp://*:9090");
-	pthread_mutex_init(&lock, NULL);
+
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "mod_audio_fork API successfully loaded\n");
 
 	/* indicate that the module should continue to be loaded */
