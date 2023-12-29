@@ -30,14 +30,15 @@ static switch_bool_t capture_callback(switch_media_bug_t *bug, void *user_data, 
 	switch_core_session_t *session = switch_core_media_bug_get_session(bug);
 	switch (type) {
 	case SWITCH_ABC_TYPE_INIT:
-		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Got SWITCH_ABC_TYPE_INIT\n");
-		break;
-
+	{
+		fork_session_start(session, bug);
+	}
+	break;
 	case SWITCH_ABC_TYPE_CLOSE:
 		{
-        //private_t* tech_pvt = (private_t *)  switch_core_media_bug_get_user_data(bug);
-		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Got SWITCH_ABC_TYPE_CLOSE for bug\n");
-        //fork_session_cleanup(session, tech_pvt->bugname, NULL, 1);
+        private_t* tech_pvt = (private_t *)  switch_core_media_bug_get_user_data(bug);
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Got SWITCH_ABC_TYPE_CLOSE for %s\n", tech_pvt->sessionId);
+        fork_session_cleanup(session, tech_pvt->bugname, NULL, 1);
 		}
 		break;
 	

@@ -450,7 +450,7 @@ extern "C" {
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "(%u) fork_session_cleanup\n", id);
 
     if (!tech_pvt) return SWITCH_STATUS_FALSE;
-    AudioPipe *pAudioPipe = static_cast<AudioPipe *>(tech_pvt->pAudioPipe);
+    //AudioPipe *pAudioPipe = static_cast<AudioPipe *>(tech_pvt->pAudioPipe);
       
     switch_mutex_lock(tech_pvt->mutex);
 
@@ -475,8 +475,29 @@ extern "C" {
       free(tmp);
     }
 
-    if (pAudioPipe && text) pAudioPipe->bufferForSending(text);
-    if (pAudioPipe) pAudioPipe->close();
+    //if (pAudioPipe && text) pAudioPipe->bufferForSending(text);
+    //if (pAudioPipe) pAudioPipe->close();
+
+    if (switch_mutex_trylock(tech_pvt->mutex) == SWITCH_STATUS_SUCCESS) {
+            pthread_mutex_lock(&lock); 
+            std::ostringstream oss;
+            oss << "{\"call_leg_id\":\"" << tech_pvt->sessionId << "\",";
+            if (NULL !=text && strlen(text) > 0) {
+              oss << "\"metadata\":\"" << text << "\",";
+            }else {
+              oss << "\"metadata\": \"\",";
+            }
+            oss << "\"audio_data\": \"\",";
+            oss << "\"action\":\"close\"}";
+
+            std::string result = oss.str();
+            switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "data : %s\n", result.c_str());
+            zmq_send (responder, result.c_str(), result.length(), 0);
+            pthread_mutex_unlock(&lock); 
+        
+			//switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Exiting SWITCH_ABC_TYPE_READ for bug \n");
+		  }
+      switch_mutex_unlock(tech_pvt->mutex);
 
     destroy_tech_pvt(tech_pvt);
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "(%u) fork_session_cleanup: connection closed\n", id);
@@ -493,8 +514,58 @@ extern "C" {
     private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
   
     if (!tech_pvt) return SWITCH_STATUS_FALSE;
-    AudioPipe *pAudioPipe = static_cast<AudioPipe *>(tech_pvt->pAudioPipe);
-    if (pAudioPipe && text) pAudioPipe->bufferForSending(text);
+    
+     if (switch_mutex_trylock(tech_pvt->mutex) == SWITCH_STATUS_SUCCESS) {
+            pthread_mutex_lock(&lock); 
+            std::ostringstream oss;
+            oss << "{\"call_leg_id\":\"" << tech_pvt->sessionId << "\",";
+            if (NULL !=text && strlen(text) > 0) {
+              oss << "\"metadata\":\"" << text << "\",";
+            }else {
+              oss << "\"metadata\": \"\",";
+            }
+            oss << "\"audio_data\": \"\",";
+            oss << "\"action\":\"send_text\"}";
+
+            std::string result = oss.str();
+            switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "data : %s\n", result.c_str());
+            zmq_send (responder, result.c_str(), result.length(), 0);
+            pthread_mutex_unlock(&lock); 
+        
+			//switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Exiting SWITCH_ABC_TYPE_READ for bug \n");
+		  }
+      switch_mutex_unlock(tech_pvt->mutex);
+
+    return SWITCH_STATUS_SUCCESS;
+  }
+
+switch_status_t fork_session_start(switch_core_session_t *session,  switch_media_bug_t *bug) {
+
+    private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
+
+    switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Fork starting for %s\n", tech_pvt->sessionId);
+
+    if (!tech_pvt) return SWITCH_STATUS_FALSE;
+    
+     if (switch_mutex_trylock(tech_pvt->mutex) == SWITCH_STATUS_SUCCESS) {
+            pthread_mutex_lock(&lock); 
+            std::ostringstream oss;
+            oss << "{\"call_leg_id\":\"" << tech_pvt->sessionId << "\",";
+            if (strlen(tech_pvt->initialMetadata) > 0) {
+              oss << "\"metadata\":\"" << tech_pvt->initialMetadata << "\",";
+            }else {
+              oss << "\"metadata\": \"\",";
+            }
+            oss << "\"audio_data\": \"\",";
+            oss << "\"action\":\"init\"}";
+            std::string result = oss.str();
+            switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "data : %s\n", result.c_str());
+            zmq_send (responder, result.c_str(), result.length(), 0);
+            pthread_mutex_unlock(&lock); 
+        
+			//switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Exiting SWITCH_ABC_TYPE_READ for bug \n");
+		  }
+      switch_mutex_unlock(tech_pvt->mutex);
 
     return SWITCH_STATUS_SUCCESS;
   }
@@ -528,9 +599,6 @@ extern "C" {
 
     tech_pvt->graceful_shutdown = 1;
 
-    AudioPipe *pAudioPipe = static_cast<AudioPipe *>(tech_pvt->pAudioPipe);
-    if (pAudioPipe) pAudioPipe->do_graceful_shutdown();
-
     return SWITCH_STATUS_SUCCESS;
   }
 
@@ -554,15 +622,17 @@ extern "C" {
             pthread_mutex_lock(&lock); 
             std::ostringstream oss;
             oss << "{\"call_leg_id\":\"" << tech_pvt->sessionId << "\",";
+            oss << "\"action\":\"audio_stream\",";
             if (strlen(tech_pvt->initialMetadata) > 0) {
               oss << "\"metadata\":\"" << tech_pvt->initialMetadata << "\",";
+            }else {
+              oss << "\"metadata\": \"\",";
             }
-
-            
+           
             oss << "\"audio_data\":\"" << drachtio::base64_encode((unsigned char const *) frame.data , frame.datalen) << "\"}";
 
             std::string result = oss.str();
-            switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "data : %s\n", result.c_str);
+            //switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "data : %s\n", result.c_str());
             zmq_send (responder, result.c_str(), result.length(), 0);
             pthread_mutex_unlock(&lock); 
         }
