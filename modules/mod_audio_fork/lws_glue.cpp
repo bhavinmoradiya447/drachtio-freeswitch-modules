@@ -19,6 +19,10 @@
 #include "audio_pipe.hpp"
 #include <zmq.h>
 
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #define RTP_PACKETIZATION_PERIOD 20
 #define FRAME_SIZE_8000  320 /*which means each 20ms frame as 320 bytes at 8 khz (1 channel only)*/
@@ -494,6 +498,13 @@ extern "C" {
             switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "data : %s\n", result.c_str());
             zmq_send (responder, result.c_str(), result.length(), 0);
             pthread_mutex_unlock(&lock); 
+            std::ostringstream path;
+            path << "/tmp/" << tech_pvt->sessionId ;
+
+            int fd = open(path.str().c_str(), O_WRONLY);
+            write(fd, "close", 5);
+            close(fd);
+
         
 			//switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Exiting SWITCH_ABC_TYPE_READ for bug \n");
 		  }
@@ -549,6 +560,11 @@ switch_status_t fork_session_start(switch_core_session_t *session,  switch_media
     
      if (switch_mutex_trylock(tech_pvt->mutex) == SWITCH_STATUS_SUCCESS) {
             pthread_mutex_lock(&lock); 
+
+            std::ostringstream path;
+            path << "/tmp/" << tech_pvt->sessionId ;
+            mkfifo(path.str().c_str(), 0666);
+
             std::ostringstream oss;
             oss << "{\"call_leg_id\":\"" << tech_pvt->sessionId << "\",";
             if (strlen(tech_pvt->initialMetadata) > 0) {
@@ -616,28 +632,20 @@ switch_status_t fork_session_start(switch_core_session_t *session,  switch_media
         switch_frame_t frame = { 0 };
         frame.data = data;
         frame.buflen = SWITCH_RECOMMENDED_BUFFER_SIZE;
+        
+        std::ostringstream path;
+        path << "/tmp/" << tech_pvt->sessionId ;
+
+        int fd = open(path.str().c_str(), O_WRONLY);
 
         //switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Got SWITCH_ABC_TYPE_READ for bug\n");
         while (switch_core_media_bug_read(bug, &frame, SWITCH_TRUE) == SWITCH_STATUS_SUCCESS) {
-            pthread_mutex_lock(&lock); 
-            std::ostringstream oss;
-            oss << "{\"call_leg_id\":\"" << tech_pvt->sessionId << "\",";
-            oss << "\"action\":\"audio_stream\",";
-            if (strlen(tech_pvt->initialMetadata) > 0) {
-              oss << "\"metadata\":\"" << tech_pvt->initialMetadata << "\",";
-            }else {
-              oss << "\"metadata\": \"\",";
-            }
-           
-            oss << "\"audio_data\":\"" << drachtio::base64_encode((unsigned char const *) frame.data , frame.datalen) << "\"}";
-
-            std::string result = oss.str();
-            //switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "data : %s\n", result.c_str());
-            zmq_send (responder, result.c_str(), result.length(), 0);
-            pthread_mutex_unlock(&lock); 
+           write(fd, frame.data , frame.datalen);
         }
+        close(fd);
 			//switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Exiting SWITCH_ABC_TYPE_READ for bug \n");
 		  }
+      
       switch_mutex_unlock(tech_pvt->mutex);
     
     return SWITCH_TRUE;
