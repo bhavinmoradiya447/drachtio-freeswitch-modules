@@ -486,6 +486,8 @@ extern "C" {
             pthread_mutex_lock(&lock); 
             std::ostringstream oss;
             oss << "{\"call_leg_id\":\"" << tech_pvt->sessionId << "\",";
+            oss << "\"host_name\":\"" << tech_pvt->host << "\",";
+
             if (NULL !=text && strlen(text) > 0) {
               oss << "\"metadata\":\"" << text << "\",";
             }else {
@@ -530,6 +532,8 @@ extern "C" {
             pthread_mutex_lock(&lock); 
             std::ostringstream oss;
             oss << "{\"call_leg_id\":\"" << tech_pvt->sessionId << "\",";
+            oss << "\"host_name\":\"" << tech_pvt->host << "\",";
+
             if (NULL !=text && strlen(text) > 0) {
               oss << "\"metadata\":\"" << text << "\",";
             }else {
@@ -567,6 +571,7 @@ switch_status_t fork_session_start(switch_core_session_t *session,  switch_media
 
             std::ostringstream oss;
             oss << "{\"call_leg_id\":\"" << tech_pvt->sessionId << "\",";
+             oss << "\"host_name\":\"" << tech_pvt->host << "\",";
             if (strlen(tech_pvt->initialMetadata) > 0) {
               oss << "\"metadata\":\"" << tech_pvt->initialMetadata << "\",";
             }else {
