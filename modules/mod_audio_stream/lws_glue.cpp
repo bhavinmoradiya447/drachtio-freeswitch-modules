@@ -15,7 +15,7 @@
 
 #include "base64.hpp"
 #include "parser.hpp"
-#include "mod_audio_fork.h"
+#include "mod_audio_stream.h"
 #include "audio_pipe.hpp"
 #include <zmq.h>
 
@@ -379,9 +379,9 @@ extern "C" {
   }
 
   switch_status_t fork_init() {
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "mod_audio_fork: audio buffer (in secs):    %d secs\n", nAudioBufferSecs);
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "mod_audio_fork: sub-protocol:              %s\n", mySubProtocolName);
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "mod_audio_fork: lws service threads:       %d\n", nServiceThreads);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "mod_audio_stream: audio buffer (in secs):    %d secs\n", nAudioBufferSecs);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "mod_audio_stream: sub-protocol:              %s\n", mySubProtocolName);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "mod_audio_stream: lws service threads:       %d\n", nServiceThreads);
  
     int logs = LLL_ERR | LLL_WARN | LLL_NOTICE ;
      //LLL_INFO | LLL_PARSER | LLL_HEADER | LLL_EXT | LLL_CLIENT  | LLL_LATENCY | LLL_DEBUG ;
