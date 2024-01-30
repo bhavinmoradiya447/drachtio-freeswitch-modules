@@ -268,7 +268,7 @@ SWITCH_STANDARD_API(fork_function)
 				else if (sampling % 8000 != 0) {
           switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "invalid sample rate: %s\n", argv[4]);					
 				}
-        status = start_capture(lsession, flags, host, port, path, sampling, sslFlags, bugname, metadata);
+        status = start_capture(lsession, flags, argv[2], port, path, sampling, sslFlags, bugname, metadata);
 			}
       else {
         switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "unsupported mod_audio_stream cmd: %s\n", argv[1]);
