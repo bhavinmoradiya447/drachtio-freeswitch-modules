@@ -197,9 +197,14 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_audio_cast_load)
 	*module_interface = switch_loadable_module_create_module_interface(pool, modname);
 
 
-	SWITCH_ADD_API(api_interface, "mod_audio_cast", "audio_cast API", cast_function, CAST_API_SYNTAX);
-	switch_console_set_complete("add mod_audio_cast start");
-	switch_console_set_complete("add mod_audio_cast stop");
+	SWITCH_ADD_API(api_interface, "uuid_audio_cast", "audio_cast API", cast_function, CAST_API_SYNTAX);
+	switch_console_set_complete("add uuid_audio_cast start");
+	switch_console_set_complete("add uuid_audio_cast stop");
+	switch_console_set_complete("add uuid_audio_cast pause");
+	switch_console_set_complete("add uuid_audio_cast resume");
+	switch_console_set_complete("add uuid_audio_cast mask");
+	switch_console_set_complete("add uuid_audio_cast unmask");
+	
 	audio_cast_init();
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "mod_audio_cast API successfully loaded\n");

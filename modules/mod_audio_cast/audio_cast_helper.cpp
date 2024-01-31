@@ -25,7 +25,7 @@ namespace {
 	  tech_pvt->audio_masked = 0;
 	  tech_pvt->graceful_shutdown = 0;
     strncpy(tech_pvt->bugname, bugname, MAX_BUG_LEN);
-  
+
    switch_mutex_init(&tech_pvt->mutex, SWITCH_MUTEX_NESTED, switch_core_session_get_pool(session));
 
     if (desiredSampling != sampling) {
@@ -119,6 +119,15 @@ switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char 
         switch_channel_set_private(channel, bugname, NULL);
         if (!channelIsClosing) {
           switch_core_media_bug_remove(session, &bug);
+        } else {
+          payload * p = new payload;
+          uuid_parse(tech_pvt->sessionId, p->id);
+          p->seq = tech_pvt->seq++;
+          p->timestamp = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
+          p->size = 0;
+          p->buf =  NULL;
+          dispatcher *disp = static_cast<dispatcher *>(tech_pvt->disp);
+          disp->dispatch(p);
         }
       }
     }
@@ -197,7 +206,7 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
           p->seq = tech_pvt->seq++;
           p->timestamp = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
           p->size = frame.datalen;
-          memcpy(p->buf, frame.data, frame.datalen);
+          p->buf =  static_cast<char *>(frame.data);
           dispatcher *disp = static_cast<dispatcher *>(tech_pvt->disp);
           disp->dispatch(p);
         }
