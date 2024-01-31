@@ -1,29 +1,5 @@
-#include <switch.h>
-#include <switch_json.h>
-#include <string.h>
-#include <string>
-#include <mutex>
-#include <thread>
-#include <list>
-#include <algorithm>
-#include <functional>
-#include <cassert>
-#include <cstdlib>
-#include <fstream>
-#include <sstream>
-#include <regex>
-
 #include "mod_audio_cast.h"
-
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <uuid/uuid.h>
-
-
-#define RTP_PACKETIZATION_PERIOD 20
-#define FRAME_SIZE_8000  320 /*which means each 20ms frame as 320 bytes at 8 khz (1 channel only)*/
+#include "dispatcher.h"
 
 namespace {
   static unsigned int idxCallCount = 0;
@@ -49,7 +25,7 @@ namespace {
 	  tech_pvt->audio_masked = 0;
 	  tech_pvt->graceful_shutdown = 0;
     strncpy(tech_pvt->bugname, bugname, MAX_BUG_LEN);
-
+  
    switch_mutex_init(&tech_pvt->mutex, SWITCH_MUTEX_NESTED, switch_core_session_get_pool(session));
 
     if (desiredSampling != sampling) {
@@ -152,7 +128,7 @@ switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char 
     return SWITCH_STATUS_SUCCESS;
   }
 
-switch_status_t audio_cast_session_mastunmask(switch_core_session_t *session, char *bugname, int mask){
+switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, char *bugname, int mask){
   switch_channel_t *channel = switch_core_session_get_channel(session);
     switch_media_bug_t *bug = (switch_media_bug_t*) switch_channel_get_private(channel, bugname);
     if (!bug) {

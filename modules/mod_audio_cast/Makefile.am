@@ -1,7 +1,6 @@
 include $(top_srcdir)/build/modmake.rulesam
 MODNAME=mod_audio_cast
 
-CC = g++
 mod_LTLIBRARIES = mod_audio_cast.la
 mod_audio_cast_la_SOURCES  = mod_audio_cast.c audio_cast_helper.cpp dispatcher.cpp
 mod_audio_cast_la_CFLAGS   = $(AM_CFLAGS)

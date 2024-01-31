@@ -12,7 +12,7 @@ switch_status_t audio_cast_session_init(switch_core_session_t *session,
     char *bugname, void **ppUserData);
 switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char *bugname, int channelIsClosing);
 switch_status_t audio_cast_session_pauseresume(switch_core_session_t *session, char *bugname, int pause);
-switch_status_t audio_cast_session_mastunmask(switch_core_session_t *session, char *bugname, int mask);
+switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, char *bugname, int mask);
 switch_status_t audio_cast_session_graceful_shutdown(switch_core_session_t *session, char *bugname);
 switch_bool_t audio_cast_frame(switch_core_session_t *session, switch_media_bug_t *bug);
 #endif

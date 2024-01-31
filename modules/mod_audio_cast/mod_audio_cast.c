@@ -1,7 +1,6 @@
 #include "mod_audio_cast.h"
 #include "audio_cast_helper.h"
 
-static unsigned int idxCallCount = 0;
 
 /* Prototypes */
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_audio_cast_shutdown);
