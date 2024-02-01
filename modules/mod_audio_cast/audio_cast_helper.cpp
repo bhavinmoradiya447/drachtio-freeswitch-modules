@@ -61,7 +61,7 @@ namespace {
 extern "C" {
 
   switch_status_t audio_cast_init() {
-   dispatcher::get_instance();
+   //dispatcher::get_instance();
    return SWITCH_STATUS_SUCCESS;
   }
 

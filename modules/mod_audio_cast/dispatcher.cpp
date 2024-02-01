@@ -93,9 +93,9 @@ void dispatcher::run() {
             cout << "Error writing to pipe" << endl;
             return;
         }
-        if (size == 0)
+        else 
         {
-            cout << "[info] sent end of stream" << endl;
+            //cout << "[info] sent end of stream" << endl;
             // flush
             fsync(fd);
         }
