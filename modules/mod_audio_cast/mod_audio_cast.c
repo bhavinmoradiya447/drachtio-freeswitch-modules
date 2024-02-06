@@ -133,7 +133,7 @@ static switch_status_t start_capture(switch_core_session_t *session,
 #define CAST_API_SYNTAX "<uuid> [start | stop ]"
 SWITCH_STANDARD_API(cast_function)
 {
-	char *mycmd = NULL, *argv[2] = { 0 };
+	char *mycmd = NULL, *argv[3] = { 0 };
 	int argc = 0;
 	switch_status_t status = SWITCH_STATUS_FALSE;
     char *bugname = "audio_cast";

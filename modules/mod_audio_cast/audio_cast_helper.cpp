@@ -90,11 +90,6 @@ extern "C" {
     int fd = -1;
     uint32_t cur_try;
 
-    switch_assert(data != NULL);
-
-    if (globals.shutdown) {
-      goto end;
-    }
 
 		char *destUrl = NULL;
 		curl_handle = switch_curl_easy_init();
@@ -114,18 +109,18 @@ extern "C" {
 
 
 		// tcp timeout
-		switch_curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, globals.timeout);
+		switch_curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, 3);
 
 		/* these were used for testing, optionally they may be enabled if someone desires
 		   switch_curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1); // 302 recursion level
 		 */
 
-		for (cur_try = 0; cur_try < globals.retries; cur_try++) {
+		for (cur_try = 0; cur_try < 3; cur_try++) {
 			if (cur_try > 0) {
-				switch_yield(globals.delay * 1000000);
+				switch_yield(200000);
 			}
 
-			destUrl = "http://localhost:3030/start_cast";
+			destUrl = switch_mprintf("%s","http://localhost:3030/start_cast");
 			switch_curl_easy_setopt(curl_handle, CURLOPT_URL, destUrl);
 
 			switch_curl_easy_perform(curl_handle);
@@ -136,13 +131,9 @@ extern "C" {
 			} else {
 				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Got error [%ld] posting to web server [%s]\n",
 								  httpRes, "http://localhost:3030/start_cast");
-				globals.url_index++;
-				switch_assert(globals.url_count <= MAX_URLS);
-				if (globals.url_index >= globals.url_count) {
-					globals.url_index = 0;
-				} else {
-					switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Retry will be with url [%s]\n", "http://localhost:3030/start_cast");
-				}
+				
+				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Retry will be with url [%s]\n", "http://localhost:3030/start_cast");
+				
 			}
 		}
 		
@@ -157,7 +148,7 @@ extern "C" {
 		
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Unable to post to mcs server\n");
     return SWITCH_STATUS_FALSE;
-    
+
     end:
     if (curl_handle) {
       switch_curl_easy_cleanup(curl_handle);
@@ -168,10 +159,7 @@ extern "C" {
     if (slist) {
       switch_curl_slist_free_all(slist);
     }
-    if (curl_json_text != data->json_text) {
-      switch_safe_free(curl_json_text);
-    }
-
+    switch_safe_free(curl_json_text);
     return SWITCH_STATUS_SUCCESS;
   }
 
