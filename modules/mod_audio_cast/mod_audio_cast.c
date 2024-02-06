@@ -1,7 +1,6 @@
 #include "mod_audio_cast.h"
 #include "audio_cast_helper.h"
 
-
 /* Prototypes */
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_audio_cast_shutdown);
 SWITCH_MODULE_RUNTIME_FUNCTION(mod_audio_cast_runtime);
@@ -75,7 +74,8 @@ static switch_status_t do_stop(switch_core_session_t *session, char* bugname)
 static switch_status_t start_capture(switch_core_session_t *session, 
         switch_media_bug_flag_t flags, 
         int sampling,
-        char* bugname)
+        char* bugname,
+		char* hostName)
 {
 	switch_channel_t *channel = switch_core_session_get_channel(session);
 	switch_media_bug_t *bug;
@@ -90,7 +90,12 @@ static switch_status_t start_capture(switch_core_session_t *session,
 
 	if (switch_channel_get_private(channel, bugname)) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "mod_audio_cast: bug %s already attached!\n", bugname);
-		return SWITCH_STATUS_FALSE;
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "calling audio_cast_call_mcs.\n");
+		if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, hostName)) {
+			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error calling audio_cast_call_mcs.\n");
+			return SWITCH_STATUS_FALSE;
+		}
+		return SWITCH_STATUS_SUCCESS;
 	}
 
 	read_codec = switch_core_session_get_read_codec(session);
@@ -106,6 +111,13 @@ static switch_status_t start_capture(switch_core_session_t *session,
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error initializing mod_audio_cast session.\n");
 		return SWITCH_STATUS_FALSE;
 	}
+
+	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "calling audio_cast_call_mcs.\n");
+	if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, hostName)) {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error calling audio_cast_call_mcs.\n");
+		return SWITCH_STATUS_FALSE;
+	}
+	
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "adding bug %s.\n", bugname);
 	if ((status = switch_core_media_bug_add(session, bugname, NULL, capture_callback, pUserData, 0, flags, &bug)) != SWITCH_STATUS_SUCCESS) {
 		return status;
@@ -162,7 +174,7 @@ SWITCH_STANDARD_API(cast_function)
 				switch_media_bug_flag_t flags = SMBF_READ_STREAM ;
 				flags |= SMBF_WRITE_STREAM ;
 				flags |= SMBF_STEREO;
-				status = start_capture(lsession, flags, sampling, bugname);
+				status = start_capture(lsession, flags, sampling, bugname, argv[2]);
 			}
 			else {
 				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "unsupported mod_audio_cast cmd: %s\n", argv[1]);

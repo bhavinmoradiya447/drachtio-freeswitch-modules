@@ -1,5 +1,6 @@
 #include "mod_audio_cast.h"
 #include "dispatcher.h"
+#include <switch_curl.h>
 
 namespace {
   static unsigned int idxCallCount = 0;
@@ -67,6 +68,110 @@ extern "C" {
 
   switch_status_t audio_cast_cleanup() {
     dispatcher::get_instance()->stop();
+    return SWITCH_STATUS_SUCCESS;
+  }
+
+  /* this function would have access to the HTML returned by the webserver, we don't need it
+  * and the default curl activity is to print to stdout, something not as desirable
+  * so we have a dummy function here
+  */
+  size_t httpCallBack(char *buffer, size_t size, size_t nitems, void *outstream)
+  {
+    return size * nitems;
+  }
+
+  switch_status_t audio_cast_call_mcs(switch_core_session_t *session, char* hostName) {
+    char* uuid = switch_core_session_get_uuid(session);
+    char *curl_json_text = NULL;
+    long httpRes;
+    CURL *curl_handle = NULL;
+    switch_curl_slist_t *headers = NULL;
+    switch_curl_slist_t *slist = NULL;
+    int fd = -1;
+    uint32_t cur_try;
+
+    switch_assert(data != NULL);
+
+    if (globals.shutdown) {
+      goto end;
+    }
+
+		char *destUrl = NULL;
+		curl_handle = switch_curl_easy_init();
+		headers = switch_curl_slist_append(headers, "Content-Type: application/json");
+	
+
+		curl_json_text = switch_mprintf("{\"uuid\": \"%s\", \"address\": \"%s\"}", uuid, hostName);
+		switch_assert(curl_json_text != NULL);
+
+		
+		switch_curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers);
+		switch_curl_easy_setopt(curl_handle, CURLOPT_POST, 1);
+		switch_curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1);
+		switch_curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, curl_json_text);
+		switch_curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "freeswitch-json/1.0");
+		switch_curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, httpCallBack);
+
+
+		// tcp timeout
+		switch_curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, globals.timeout);
+
+		/* these were used for testing, optionally they may be enabled if someone desires
+		   switch_curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1); // 302 recursion level
+		 */
+
+		for (cur_try = 0; cur_try < globals.retries; cur_try++) {
+			if (cur_try > 0) {
+				switch_yield(globals.delay * 1000000);
+			}
+
+			destUrl = "http://localhost:3030/start_cast";
+			switch_curl_easy_setopt(curl_handle, CURLOPT_URL, destUrl);
+
+			switch_curl_easy_perform(curl_handle);
+			switch_curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &httpRes);
+			switch_safe_free(destUrl);
+			if (httpRes >= 200 && httpRes < 300) {
+				goto end;
+			} else {
+				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Got error [%ld] posting to web server [%s]\n",
+								  httpRes, "http://localhost:3030/start_cast");
+				globals.url_index++;
+				switch_assert(globals.url_count <= MAX_URLS);
+				if (globals.url_index >= globals.url_count) {
+					globals.url_index = 0;
+				} else {
+					switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Retry will be with url [%s]\n", "http://localhost:3030/start_cast");
+				}
+			}
+		}
+		
+		switch_curl_easy_cleanup(curl_handle);
+		switch_curl_slist_free_all(headers);
+		switch_curl_slist_free_all(slist);
+		slist = NULL;
+		headers = NULL;
+		curl_handle = NULL;
+
+		/* if we are here the web post failed for some reason */
+		
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Unable to post to mcs server\n");
+    return SWITCH_STATUS_FALSE;
+    
+    end:
+    if (curl_handle) {
+      switch_curl_easy_cleanup(curl_handle);
+    }
+    if (headers) {
+      switch_curl_slist_free_all(headers);
+    }
+    if (slist) {
+      switch_curl_slist_free_all(slist);
+    }
+    if (curl_json_text != data->json_text) {
+      switch_safe_free(curl_json_text);
+    }
+
     return SWITCH_STATUS_SUCCESS;
   }
 

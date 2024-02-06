@@ -10,6 +10,7 @@ switch_status_t audio_cast_cleanup();
 switch_status_t audio_cast_session_init(switch_core_session_t *session, 
 		uint32_t samples_per_second, int sampling, int channels, 
     char *bugname, void **ppUserData);
+switch_status_t audio_cast_call_mcs(switch_core_session_t *session, char* hostName);
 switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char *bugname, int channelIsClosing);
 switch_status_t audio_cast_session_pauseresume(switch_core_session_t *session, char *bugname, int pause);
 switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, char *bugname, int mask);
