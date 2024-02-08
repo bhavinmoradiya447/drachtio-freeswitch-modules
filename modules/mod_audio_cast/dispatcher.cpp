@@ -2,11 +2,11 @@
 
 dispatcher::dispatcher() {
     mkfifo(myfifo, 0666);
-    fd = open(myfifo, O_WRONLY);
+    //fd = open(myfifo, O_WRONLY);
 }
 
 dispatcher::~dispatcher() {
-    close(fd);
+    //close(fd);
     unlink(myfifo);
 }
 
@@ -74,7 +74,7 @@ void dispatcher::run() {
         // cv.wait(lck, [this]{return ready || done;});
         if(done) {
             cout << "dispatcher done" << endl;
-            close(fd);
+            //close(fd);
             break;
         }
         // cout << "dispatcher read" << endl;
@@ -87,7 +87,9 @@ void dispatcher::run() {
         int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
         int size_pos = 16 + sizeof(int) + sizeof(long);
         memcpy(&size, buf + size_pos, sizeof(int));
+        fd = open(myfifo, O_WRONLY);
         int ret = write(fd, buf, header_size + size);
+        close(fd);
         if (ret < 0)
         {
             cout << "Error writing to pipe" << endl;
@@ -97,7 +99,7 @@ void dispatcher::run() {
         {
             //cout << "[info] sent end of stream" << endl;
             // flush
-            fsync(fd);
+            // fsync(fd);
         }
         delete[] buf;
         processed = true;
