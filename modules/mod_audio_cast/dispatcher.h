@@ -40,7 +40,8 @@ class dispatcher {
     public:
         ~dispatcher();
         void dispatch(char * buf);
-        void write_to_file(int fd, char * buf);
+        int write_to_file(int fd, char * buf);
+        void push_to_queue(char * buf);
         void stop();
         static dispatcher * get_instance() {
             static dispatcher * instance;

@@ -1,4 +1,5 @@
 #include "dispatcher.h"
+#include <errno.h>
 
 dispatcher::dispatcher() {
     mkfifo(myfifo, 0666);
@@ -35,27 +36,40 @@ void dispatcher::dispatch(char * buf) {
     lock_guard<mutex> lck(mtx);
     fd = open(myfifo, O_WRONLY | O_NONBLOCK);
     if(fd < 0) {
-        if(q.size() > QUEUE_MAX_SIZE) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] queued is fulled, ignoring audio stream\n");
-            delete[] buf;
-            return;
-        } else {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,"[ERROR] Pushing to Queue\n");
-            q.push_back(buf);
-        }
+        //
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Unable to open named pipe: %s\n", strerror(errno));
+        push_to_queue(buf);
     } else {
-        write_to_file(fd, buf);
+        int pipe_sz = fcntl(fd, F_SETPIPE_SZ, 1048576);
+        int status = write_to_file(fd, buf);
+        if(status < 0) {
+              push_to_queue(buf);
+        }
         while(!q.empty()){
             buf = q.front();
             q.pop_front();
-            write_to_file(fd, buf);
+            int status = write_to_file(fd, buf);
+             if(status < 0) {
+                push_to_queue(buf);
+                break;
+            }
         }
-        close(fd);
+       
     }
-  
+   close(fd);
 }
 
-void dispatcher::write_to_file(int fd, char * buf) {
+void dispatcher::push_to_queue(char * buf) {
+    if(q.size() > QUEUE_MAX_SIZE) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] queued is fulled, ignoring audio stream\n");
+        delete[] buf;
+        return;
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,"[ERROR] Pushing to Queue\n");
+        q.push_back(buf);
+    }
+}
+int dispatcher::write_to_file(int fd, char * buf) {
     int size;
     int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
     int size_pos = 16 + sizeof(int) + sizeof(long);
@@ -63,14 +77,13 @@ void dispatcher::write_to_file(int fd, char * buf) {
     int ret = write(fd, buf, header_size + size);
     if (ret < 0)
     {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error writing to pipe: %d\n", ret);
-        return;
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error writing to pipe: %d, ERROR: %s\n", ret, strerror(errno));
+        return -1;
     }
-    else {
-        fsync(fd);
-    }
+    fsync(fd);
     delete[] buf;
     buf = nullptr;
+    return 1;
 }
 
 /*
