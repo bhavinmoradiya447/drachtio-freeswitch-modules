@@ -30,45 +30,17 @@ dispatcher::~dispatcher() {
 //     cv.notify_one();
 // }
 
-void dispatcher::dispatch(payload * p) {
-    // fixed size header 32 bytes
-    int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
-    // compute buffer size
-    unsigned int len = header_size + p->size;
-
-    // create buffer
-    char * buf = new char[len];
-    int pos = 0;
-    // copy uuid to buffer
-    memcpy(buf + pos, &p->id, 16);
-    pos = pos + 16;
-    // copy seq to buffer
-    memcpy(buf + pos, &p->seq, sizeof(int));
-    pos = pos + sizeof(int);
-    // copy timestamp to buffer
-    memcpy(buf + pos, &p->timestamp, sizeof(long));
-    pos = pos + sizeof(long);
-    // copy size to buffer
-    memcpy(buf + pos, &p->size, sizeof(int));
-    pos = pos + sizeof(int);
-    // copy payload to buffer
-    if (p->size > 0)
-    {
-        memcpy(buf + pos, p->buf, p->size);
-    } else {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "queued end of stream\n");
-
-    }
+void dispatcher::dispatch(char * buf) {
+    
     lock_guard<mutex> lck(mtx);
     fd = open(myfifo, O_WRONLY | O_NONBLOCK);
     if(fd < 0) {
         if(q.size() > QUEUE_MAX_SIZE) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] queued is fulled, ignoring audio stream\n");
             delete[] buf;
-           goto end;
+            return;
         } else {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,"[ERROR] Pushing to Queue\n");
-
             q.push_back(buf);
         }
     } else {
@@ -80,8 +52,7 @@ void dispatcher::dispatch(payload * p) {
         }
         close(fd);
     }
-   end: 
-    delete p;
+  
 }
 
 void dispatcher::write_to_file(int fd, char * buf) {

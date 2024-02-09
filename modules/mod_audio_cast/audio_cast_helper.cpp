@@ -214,15 +214,37 @@ switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char 
           switch_core_media_bug_remove(session, &bug);
         } 
 
-        payload * p = new payload;
-        uuid_parse(tech_pvt->sessionId, p->id);
-        p->seq = tech_pvt->seq++;
-        p->timestamp = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
-        p->size = 0;
-        p->buf =  NULL;
         dispatcher *disp = static_cast<dispatcher *>(tech_pvt->disp);
-        disp->dispatch(p);
-        
+
+        uuid_t uuid ;
+        uuid_parse(tech_pvt->sessionId, uuid);
+        unsigned int seq = tech_pvt->seq++;
+        unsigned long timestamp = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
+        unsigned int size = 0;
+
+        // fixed size header 32 bytes
+        int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
+        // compute buffer size
+        unsigned int len = header_size;
+
+        // create buffer
+        char * buf = new char[len];
+        int pos = 0;
+        // copy uuid to buffer
+        memcpy(buf + pos, &uuid, 16);
+        pos = pos + 16;
+        // copy seq to buffer
+        memcpy(buf + pos, &seq, sizeof(int));
+        pos = pos + sizeof(int);
+        // copy timestamp to buffer
+        memcpy(buf + pos, &timestamp, sizeof(long));
+        pos = pos + sizeof(long);
+        // copy size to buffer
+        memcpy(buf + pos, &size, sizeof(int));
+        pos = pos + sizeof(int);
+        // copy payload to buffer
+        disp->dispatch(buf);
+      
       }
     }
 
@@ -294,15 +316,42 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
         frame.buflen = SWITCH_RECOMMENDED_BUFFER_SIZE;
         
         while (switch_core_media_bug_read(bug, &frame, SWITCH_TRUE) == SWITCH_STATUS_SUCCESS) {
-//           write(fd, frame.data , frame.datalen);
-          payload * p = new payload;
-          uuid_parse(tech_pvt->sessionId, p->id);
-          p->seq = tech_pvt->seq++;
-          p->timestamp = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
-          p->size = frame.datalen;
-          p->buf =  static_cast<char *>(frame.data);
+          uuid_t uuid ;
+          uuid_parse(tech_pvt->sessionId, uuid);
+          unsigned int seq = tech_pvt->seq++;
+          unsigned long timestamp = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
+          unsigned int size = frame.datalen;
           dispatcher *disp = static_cast<dispatcher *>(tech_pvt->disp);
-          disp->dispatch(p);
+
+          // fixed size header 32 bytes
+          int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
+          // compute buffer size
+          unsigned int len = header_size + frame.datalen;
+
+          // create buffer
+          char * buf = new char[len];
+          int pos = 0;
+          // copy uuid to buffer
+          memcpy(buf + pos, &uuid, 16);
+          pos = pos + 16;
+          // copy seq to buffer
+          memcpy(buf + pos, &seq, sizeof(int));
+          pos = pos + sizeof(int);
+          // copy timestamp to buffer
+          memcpy(buf + pos, &timestamp, sizeof(long));
+          pos = pos + sizeof(long);
+          // copy size to buffer
+          memcpy(buf + pos, &size, sizeof(int));
+          pos = pos + sizeof(int);
+          // copy payload to buffer
+          if (size > 0)
+          {
+              memcpy(buf + pos, frame.data, size);
+          } else {
+                  switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Pushed empty frame\n");
+
+          }
+          disp->dispatch(buf);
         }
 	  }
       
