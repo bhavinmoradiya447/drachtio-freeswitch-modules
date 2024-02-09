@@ -2,11 +2,11 @@
 
 dispatcher::dispatcher() {
     mkfifo(myfifo, 0666);
-    //fd = open(myfifo, O_WRONLY);
+   // fd = open(myfifo, O_WRONLY);
 }
 
 dispatcher::~dispatcher() {
-    //close(fd);
+   // close(fd);
     unlink(myfifo);
 }
 
@@ -56,14 +56,53 @@ void dispatcher::dispatch(payload * p) {
     {
         memcpy(buf + pos, p->buf, p->size);
     } else {
-        cout << "[info] queued end of stream" << endl;
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "queued end of stream\n");
+
     }
-    unique_lock<mutex> lck(mtx);
-    q.push(buf);
-    ready = true;
-    cv.notify_one();
+    lock_guard<mutex> lck(mtx);
+    fd = open(myfifo, O_WRONLY | O_NONBLOCK);
+    if(fd < 0) {
+        if(q.size() > QUEUE_MAX_SIZE) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] queued is fulled, ignoring audio stream\n");
+            delete[] buf;
+           goto end;
+        } else {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,"[ERROR] Pushing to Queue\n");
+
+            q.push_back(buf);
+        }
+    } else {
+        write_to_file(fd, buf);
+        while(!q.empty()){
+            buf = q.front();
+            q.pop_front();
+            write_to_file(fd, buf);
+        }
+        close(fd);
+    }
+   end: 
+    delete p;
 }
 
+void dispatcher::write_to_file(int fd, char * buf) {
+    int size;
+    int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
+    int size_pos = 16 + sizeof(int) + sizeof(long);
+    memcpy(&size, buf + size_pos, sizeof(int));
+    int ret = write(fd, buf, header_size + size);
+    if (ret < 0)
+    {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error writing to pipe: %d\n", ret);
+        return;
+    }
+    else {
+        fsync(fd);
+    }
+    delete[] buf;
+    buf = nullptr;
+}
+
+/*
 void dispatcher::run() {
     while (true) {
         unique_lock<mutex> lck(mtx);
@@ -74,12 +113,11 @@ void dispatcher::run() {
         // cv.wait(lck, [this]{return ready || done;});
         if(done) {
             cout << "dispatcher done" << endl;
-            //close(fd);
+            close(fd);
             break;
         }
         // cout << "dispatcher read" << endl;
-        char * buf = q.front();
-        q.pop();
+       
         ready = false;
         lck.unlock();
         // read size from buf
@@ -87,9 +125,9 @@ void dispatcher::run() {
         int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
         int size_pos = 16 + sizeof(int) + sizeof(long);
         memcpy(&size, buf + size_pos, sizeof(int));
-        fd = open(myfifo, O_WRONLY);
+        //fd = open(myfifo, O_WRONLY);
         int ret = write(fd, buf, header_size + size);
-        close(fd);
+        //close(fd);
         if (ret < 0)
         {
             cout << "Error writing to pipe" << endl;
@@ -99,15 +137,19 @@ void dispatcher::run() {
         {
             //cout << "[info] sent end of stream" << endl;
             // flush
-            // fsync(fd);
+            fsync(fd);
         }
         delete[] buf;
+        buf = nullptr;
         processed = true;
     }
 }
+*/
 
 void dispatcher::stop() {
-    unique_lock<mutex> lck(mtx);
-    done = true;
-    cv.notify_all();
+   // unique_lock<mutex> lck(mtx);
+  //  done = true;
+   // cv.notify_all();
+    //close(fd);
+    unlink(myfifo);
 }

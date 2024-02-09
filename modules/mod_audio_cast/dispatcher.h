@@ -1,7 +1,7 @@
 #ifndef DISPATCHER_H
 #define DISPATCHER_H
 
-#include <queue>
+#include <list>
 #include <mutex>
 #include <condition_variable>
 #include <iostream>
@@ -12,6 +12,8 @@
 #include <cstring>
 #include <uuid/uuid.h>
 #include <thread>
+
+#define QUEUE_MAX_SIZE  20000  // i.e 20000 * (8192  byte (Audio packets) + 32 header)  ~ 165 MB 
 
 using namespace std;
 
@@ -27,7 +29,7 @@ class dispatcher {
     private:
         mutex mtx;
         condition_variable cv;
-        queue<char *> q;
+        list<char *> q;
         bool ready = false;
         bool processed = false;
         bool done = false;
@@ -37,14 +39,14 @@ class dispatcher {
     public:
         ~dispatcher();
         void dispatch(payload * p);
-        void run();
+        void write_to_file(int fd, char * buf);
         void stop();
         static dispatcher * get_instance() {
             static dispatcher * instance;
             if (instance == NULL) {
                 instance = new dispatcher();
-                thread t(&dispatcher::run, instance);
-                t.detach();
+                //thread t(&dispatcher::run, instance);
+                //t.detach();
             }
             return instance;
         }
