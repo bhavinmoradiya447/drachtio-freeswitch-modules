@@ -36,7 +36,7 @@ class dispatcher {
         condition_variable cv_arr[POOL_SIZE];
         list<char *> q_arr[POOL_SIZE];
         bool ready_arr[POOL_SIZE];
-        bool processed_err[POOL_SIZE];
+        bool processed_arr[POOL_SIZE];
         bool done_arr[POOL_SIZE];
         int fd_arr[POOL_SIZE];
         consistence_hashing * consistance_hash;

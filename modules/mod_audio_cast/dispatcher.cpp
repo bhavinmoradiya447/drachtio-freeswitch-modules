@@ -4,7 +4,7 @@
 
 dispatcher::dispatcher() {
     std::fill_n(ready_arr, POOL_SIZE, false);
-    std::fill_n(processed_err, POOL_SIZE, false);
+    std::fill_n(processed_arr, POOL_SIZE, false);
     std::fill_n(done_arr, POOL_SIZE, false);
    // fd = open(myfifo, O_WRONLY);
    consistance_hash = new consistence_hashing(1000);
@@ -86,7 +86,7 @@ void dispatcher::run(int index) {
         unique_lock<mutex> lck(mtx_arr[index]);
         // cout << "dispatcher waiting to read" << endl;
         if (q_arr[index].empty()) {
-            cv_arr[index].wait(lck, [this]{return ready_arr[index] || done_arr[index];});
+            cv_arr[index].wait(lck, [this, index]{return ready_arr[index] || done_arr[index];});
         }   
         // cv.wait(lck, [this]{return ready || done;});
         if(done_arr[index]) {
@@ -108,7 +108,7 @@ void dispatcher::run(int index) {
         if (ret < 0)
         {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Error writing to pipe %d: %s\n", index, strerror(errno));
-            goto end:
+            goto end;
         } else if (ret < header_size + size) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Partial Write happend on named pipe %d, expteded %d but wrote only %d", index, (header_size + size), ret);
         }
@@ -121,6 +121,7 @@ void dispatcher::run(int index) {
         end:
         delete[] buf;
         processed_arr[index] = true;
+        
     }
 }
 
