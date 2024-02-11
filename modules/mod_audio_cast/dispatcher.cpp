@@ -3,8 +3,6 @@
 
 
 dispatcher::dispatcher() {
-    std::fill_n(ready_arr, POOL_SIZE, false);
-    std::fill_n(processed_arr, POOL_SIZE, false);
     std::fill_n(done_arr, POOL_SIZE, false);
    // fd = open(myfifo, O_WRONLY);
    consistance_hash = new consistence_hashing(1000);
@@ -74,61 +72,72 @@ void dispatcher::dispatch(payload * p, char * uuid) {
     } else {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] queued end of stream: %s\n", uuid);
     }
-    unique_lock<mutex> lck(mtx_arr[index]);
-    q_arr[index].push_back(buf);
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] Queue %d size is : %d\n", index, q_arr[index].size());
-    ready_arr[index] = true;
-    cv_arr[index].notify_one();
+    {
+        lock_guard<mutex> lck(mtx_arr[index]);
+        q_arr[index].push_back(buf);
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] Queue %d size is : %d\n", index, q_arr[index].size());
+    }
+    //cv_arr[index].notify_one();
 }
 
 void dispatcher::run(int index) {
     while (true) {
         unique_lock<mutex> lck(mtx_arr[index]);
         // cout << "dispatcher waiting to read" << endl;
-        if (q_arr[index].empty()) {
-            cv_arr[index].wait(lck, [this, index]{return ready_arr[index] || done_arr[index];});
-        }   
-        // cv.wait(lck, [this]{return ready || done;});
-        if(done_arr[index]) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] dispatcher done for %d\n", index);
-            close(fd_arr[index]);
-            break;
+        bool is_empty = false; 
+        char * buf;
+        {
+            lock_guard<mutex> lck(mtx_arr[index]);
+            if (q_arr[index].empty()) {
+                is_empty = true;
+            } else {
+                char * buf = q_arr[index].front();
+                q_arr[index].pop_front();
+            }
+        }
+        if(is_empty){
+            std::this_thread::sleep_for(100ms);
+            continue; 
         }
         // cout << "dispatcher read" << endl;
-        char * buf = q_arr[index].front();
-        q_arr[index].pop_front();
-        ready_arr[index] = false;
-        lck.unlock();
+       
         // read size from buf
         int size;
         int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
         int size_pos = 16 + sizeof(int) + sizeof(long);
         memcpy(&size, buf + size_pos, sizeof(int));
-        int ret = write(fd_arr[index], buf, header_size + size);
-        if (ret < 0)
-        {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Error writing to pipe %d: %s\n", index, strerror(errno));
-            goto end;
-        } else if (ret < header_size + size) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Partial Write happend on named pipe %d, expteded %d but wrote only %d\n", index, (header_size + size), ret);
-        }
-        else 
-        {
-            //cout << "[info] sent end of stream" << endl;
-            // flush
-            fsync(fd_arr[index]);
+        {            
+            lock_guard<mutex> lck(mtx_wr_arr[index]);
+            int ret = write(fd_arr[index], buf, header_size + size);
+            if (ret < 0)
+            {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Error writing to pipe %d: %s\n", index, strerror(errno));
+                goto end;
+            } else if (ret < header_size + size) {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Partial Write happend on named pipe %d, expteded %d but wrote only %d\n", index, (header_size + size), ret);
+            }
+            else 
+            {
+                //cout << "[info] sent end of stream" << endl;
+                // flush
+                fsync(fd_arr[index]);
+            }
         }
         end:
         delete[] buf;
-        processed_arr[index] = true;
+        if(done_arr[index]) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] dispatcher done for %d\n", index);
+            close(fd_arr[index]);
+            break;
+        }
         
     }
 }
 
 void dispatcher::stop() {
     for(int index =0; index< POOL_SIZE; index ++) {
-        unique_lock<mutex> lck(mtx_arr[index]);
+        //unique_lock<mutex> lck(mtx_arr[index]);
         done_arr[index] = true;
-        cv_arr[index].notify_all();
+        //cv_arr[index].notify_all();
     }
 }
