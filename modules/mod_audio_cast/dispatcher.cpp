@@ -1,6 +1,6 @@
 #include "dispatcher.h"
 #include <errno.h>
-
+#include <chrono>
 
 dispatcher::dispatcher() {
     std::fill_n(done_arr, POOL_SIZE, false);
@@ -75,36 +75,37 @@ void dispatcher::dispatch(payload * p, char * uuid) {
     {
         lock_guard<mutex> lck(mtx_arr[index]);
         q_arr[index].push_back(buf);
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] Queue %d size is : %d\n", index, q_arr[index].size());
+        if(q_arr[index].size() % 1000 == 0){
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[info] Queue %d size is : %d\n", index, q_arr[index].size());
+        }
     }
     //cv_arr[index].notify_one();
 }
 
 void dispatcher::run(int index) {
     while (true) {
-        unique_lock<mutex> lck(mtx_arr[index]);
         // cout << "dispatcher waiting to read" << endl;
         bool is_empty = false; 
         char * buf;
+        int size;
+        int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
+        int size_pos = 16 + sizeof(int) + sizeof(long);
         {
             lock_guard<mutex> lck(mtx_arr[index]);
             if (q_arr[index].empty()) {
                 is_empty = true;
             } else {
-                char * buf = q_arr[index].front();
+                buf = q_arr[index].front();
                 q_arr[index].pop_front();
             }
         }
         if(is_empty){
-            std::this_thread::sleep_for(100ms);
+            std::this_thread::sleep_for(chrono::microseconds(100));
             continue; 
         }
         // cout << "dispatcher read" << endl;
        
         // read size from buf
-        int size;
-        int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
-        int size_pos = 16 + sizeof(int) + sizeof(long);
         memcpy(&size, buf + size_pos, sizeof(int));
         {            
             lock_guard<mutex> lck(mtx_wr_arr[index]);
@@ -136,8 +137,6 @@ void dispatcher::run(int index) {
 
 void dispatcher::stop() {
     for(int index =0; index< POOL_SIZE; index ++) {
-        //unique_lock<mutex> lck(mtx_arr[index]);
         done_arr[index] = true;
-        //cv_arr[index].notify_all();
     }
 }
