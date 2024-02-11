@@ -2,13 +2,21 @@
 #include <errno.h>
 
 dispatcher::dispatcher() {
-    mkfifo(myfifo, 0666);
    // fd = open(myfifo, O_WRONLY);
+   consistance_hash = new consistence_hashing(1000);
+   for(int i=0; i< POOL_SIZE; i++){
+    consistance_hash->addNode(std::to_string(i));    
+    fifo_files[i] = switch_mprintf("/tmp/mod-audio-cast-pipe-%d", i); 
+    mkfifo(fifo_files[i], 0666);
+   }
+ 
 }
 
 dispatcher::~dispatcher() {
    // close(fd);
-    unlink(myfifo);
+    for(int i=0; i< POOL_SIZE; i++){
+        unlink(fifo_files[i]);
+    }
 }
 
 // void dispatcher::dispatch(uuid_t id, char * buf, unsigned int size, unsigned int seq) {
@@ -31,26 +39,27 @@ dispatcher::~dispatcher() {
 //     cv.notify_one();
 // }
 
-void dispatcher::dispatch(char * buf) {
+void dispatcher::dispatch(char * buf, char * uuid) {
     
-    lock_guard<mutex> lck(mtx);
-    fd = open(myfifo, O_WRONLY | O_NONBLOCK);
+    int index = stoi(consistance_hash->getNode(uuid));
+
+    lock_guard<mutex> lck(mtx_arr[index]);
+    fd = open(fifo_files[index], O_WRONLY | O_NONBLOCK);
     if(fd < 0) {
         //
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Unable to open named pipe: %s\n", strerror(errno));
-        push_to_queue(buf);
+        push_to_queue(buf, index);
     } else {
-        int pipe_sz = fcntl(fd, F_SETPIPE_SZ, 1048576);
         int status = write_to_file(fd, buf);
         if(status < 0) {
-              push_to_queue(buf);
+              push_to_queue(buf, index);
         }
-        while(!q.empty()){
-            buf = q.front();
-            q.pop_front();
+        while(!q_arr[index].empty()){
+            buf = q_arr[index].front();
+            q_arr[index].pop_front();
             int status = write_to_file(fd, buf);
              if(status < 0) {
-                push_to_queue(buf);
+                push_to_queue(buf, index);
                 break;
             }
         }
@@ -59,14 +68,14 @@ void dispatcher::dispatch(char * buf) {
    close(fd);
 }
 
-void dispatcher::push_to_queue(char * buf) {
-    if(q.size() > QUEUE_MAX_SIZE) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] queued is fulled, ignoring audio stream\n");
+void dispatcher::push_to_queue(char * buf, int index) {
+    if(q_arr[index].size() > QUEUE_MAX_SIZE) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] queue %d is fulled, ignoring audio stream\n", index);
         delete[] buf;
         return;
     } else {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,"[ERROR] Pushing to Queue\n");
-        q.push_back(buf);
+        q_arr[index].push_back(buf);
     }
 }
 int dispatcher::write_to_file(int fd, char * buf) {
@@ -135,5 +144,7 @@ void dispatcher::stop() {
   //  done = true;
    // cv.notify_all();
     //close(fd);
-    unlink(myfifo);
+    for(int i=0; i< POOL_SIZE; i++){
+        unlink(fifo_files[i]);
+    }
 }

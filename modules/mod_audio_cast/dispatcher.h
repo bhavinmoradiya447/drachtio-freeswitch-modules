@@ -13,8 +13,12 @@
 #include <uuid/uuid.h>
 #include <thread>
 #include <switch.h>
+#include "consistence_hashing.h"
+
 
 #define QUEUE_MAX_SIZE  20000  // i.e 20000 * (8192  byte (Audio packets) + 32 header)  ~ 165 MB 
+
+#define POOL_SIZE  5 // i.e 20000 * (8192  byte (Audio packets) + 32 header)  ~ 165 MB 
 
 using namespace std;
 
@@ -28,20 +32,21 @@ struct payload {
 
 class dispatcher {
     private:
-        mutex mtx;
+        mutex mtx_arr[POOL_SIZE];
         condition_variable cv;
-        list<char *> q;
+        list<char *> q_arr[POOL_SIZE];
         bool ready = false;
         bool processed = false;
         bool done = false;
         int fd;
-        const char * myfifo = "/tmp/mod-audio-cast-pipe";
+        const char * fifo_files[POOL_SIZE] ;
+        consistence_hashing * consistance_hash;
         dispatcher();
     public:
         ~dispatcher();
-        void dispatch(char * buf);
+        void dispatch(char * buf, char * uuid);
         int write_to_file(int fd, char * buf);
-        void push_to_queue(char * buf);
+        void push_to_queue(char * buf, int index);
         void stop();
         static dispatcher * get_instance() {
             static dispatcher * instance;
