@@ -76,6 +76,7 @@ void dispatcher::dispatch(payload * p, char * uuid) {
     }
     unique_lock<mutex> lck(mtx_arr[index]);
     q_arr[index].push_back(buf);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] Queue %d size is : %d", index, q_arr[index].size());
     ready_arr[index] = true;
     cv_arr[index].notify_one();
 }
