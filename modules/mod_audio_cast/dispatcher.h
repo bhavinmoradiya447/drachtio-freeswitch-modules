@@ -13,6 +13,7 @@
 #include <uuid/uuid.h>
 #include <thread>
 #include <switch.h>
+#include "consistence_hashing.h"
 
 #define QUEUE_MAX_SIZE  20000  // i.e 20000 * (8192  byte (Audio packets) + 32 header)  ~ 165 MB 
 
@@ -43,7 +44,7 @@ class dispatcher {
         dispatcher();
     public:
         ~dispatcher();
-        void dispatch(payload * p);
+        void dispatch(payload * p, char * uuid);
         void run(int index);
         void stop();
         static dispatcher * get_instance() {
