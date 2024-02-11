@@ -222,7 +222,7 @@ switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char 
         p->size = 0;
         p->buf =  NULL;
         dispatcher *disp = static_cast<dispatcher *>(tech_pvt->disp);
-        disp->dispatch(p);
+        disp->dispatch(p, tech_pvt->sessionId);
         delete p;
         
       }
@@ -363,7 +363,7 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
           p->size = frame.datalen;
           p->buf =  static_cast<char *>(frame.data);
           dispatcher *disp = static_cast<dispatcher *>(tech_pvt->disp);
-          disp->dispatch(p);
+          disp->dispatch(p, tech_pvt->sessionId);
           delete p;
         }
 	  }
