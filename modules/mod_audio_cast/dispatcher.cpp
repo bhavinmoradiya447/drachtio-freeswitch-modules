@@ -72,11 +72,11 @@ void dispatcher::dispatch(payload * p, char * uuid) {
     {
         memcpy(buf + pos, p->buf, p->size);
     } else {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] queued end of stream: %s", uuid);
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] queued end of stream: %s\n", uuid);
     }
     unique_lock<mutex> lck(mtx_arr[index]);
     q_arr[index].push_back(buf);
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] Queue %d size is : %d", index, q_arr[index].size());
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] Queue %d size is : %d\n", index, q_arr[index].size());
     ready_arr[index] = true;
     cv_arr[index].notify_one();
 }
@@ -90,7 +90,7 @@ void dispatcher::run(int index) {
         }   
         // cv.wait(lck, [this]{return ready || done;});
         if(done_arr[index]) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] dispatcher done for %d", index);
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] dispatcher done for %d\n", index);
             close(fd_arr[index]);
             break;
         }
@@ -110,7 +110,7 @@ void dispatcher::run(int index) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Error writing to pipe %d: %s\n", index, strerror(errno));
             goto end;
         } else if (ret < header_size + size) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Partial Write happend on named pipe %d, expteded %d but wrote only %d", index, (header_size + size), ret);
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Partial Write happend on named pipe %d, expteded %d but wrote only %d\n", index, (header_size + size), ret);
         }
         else 
         {
