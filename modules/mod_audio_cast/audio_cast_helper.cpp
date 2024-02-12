@@ -67,7 +67,7 @@ extern "C" {
 
   switch_status_t audio_cast_init() {
    //dispatcher::get_instance();
-   mkdir("/tmp/mod-audio-cast-pipe", 0700);
+   mkdir("/tmp/mod-audio-cast-pipes", 0700);
    return SWITCH_STATUS_SUCCESS;
   }
 

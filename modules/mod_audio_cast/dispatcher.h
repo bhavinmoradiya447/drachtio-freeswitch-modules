@@ -28,7 +28,7 @@ class dispatcher {
     private:
         list<char *> q;
         int fd;
-        const char * dir = "/tmp/mod-audio-cast-pipe/";
+        const char * dir = "/tmp/mod-audio-cast-pipes/";
         char * file_path;
         void push_to_queue(char * buf,  bool push_to_front);
         int write_to_file(int fd, char * buf);
