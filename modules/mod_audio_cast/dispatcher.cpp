@@ -3,10 +3,13 @@
 dispatcher::dispatcher(char * uuid) {
     file_path = switch_mprintf("%s%s", dir, uuid);
     mkfifo(file_path, 0666);
+    fd = open(file_path, O_WRONLY | O_NONBLOCK);
 }
 
 dispatcher::~dispatcher() {
-    // close(fd);
+    if(fd>0){
+        close(fd);
+    }
     // unlink(myfifo);
 }
 
@@ -59,7 +62,9 @@ void dispatcher::dispatch(payload * p) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] queued end of stream for file: %s\n", file_path);
     }
 
-    fd = open(file_path, O_WRONLY | O_NONBLOCK);
+    if(fd < 0){
+        fd = open(file_path, O_WRONLY | O_NONBLOCK);
+    }
 
     if(fd < 0) {
         //
@@ -81,7 +86,7 @@ void dispatcher::dispatch(payload * p) {
         }
         
     }
-    close(fd);
+    //close(fd);
 }
 
 
@@ -158,8 +163,22 @@ void dispatcher::run() {
         processed = true;
     }
 }
-void dispatcher::stop() {
-    
-}
 */
+void dispatcher::stop() {
+    if(fd < 0){
+        fd = open(file_path, O_WRONLY | O_NONBLOCK);
+    }
+     if(fd>0){
+         while(!q.empty()){
+            char * queued_buf = q.front();
+            q.pop_front();
+            int status = write_to_file(fd, queued_buf);
+            if(status < 0) {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Failed to write data on stop for file %s\n", file_path);
+            }
+        }
+        close(fd);
+    }
+}
+
 

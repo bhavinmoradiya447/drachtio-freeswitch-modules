@@ -37,7 +37,7 @@ class dispatcher {
         ~dispatcher();
         void dispatch(payload * p);
         //void run();
-        //void stop();
+        void stop();
         /*static dispatcher * get_instance() {
             static dispatcher * instance;
             if (instance == NULL) {

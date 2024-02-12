@@ -60,6 +60,9 @@ namespace {
       switch_mutex_destroy(tech_pvt->mutex);
       tech_pvt->mutex = nullptr;
     }
+    if (tech_pvt->disp) {
+      tech_pvt->disp = nullptr;
+    }
   }
 }
 
@@ -227,6 +230,7 @@ switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char 
         p->buf =  NULL;
         dispatcher *disp = static_cast<dispatcher *>(tech_pvt->disp);
         disp->dispatch(p);
+        disp->stop();
         delete p; 
       }
     }
