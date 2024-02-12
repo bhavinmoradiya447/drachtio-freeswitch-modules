@@ -59,31 +59,29 @@ void dispatcher::dispatch(payload * p) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] queued end of stream for file: %s\n", file_path);
     }
 
-    fd = open(fifo_files[index], O_WRONLY | O_NONBLOCK);
+    fd = open(file_path, O_WRONLY | O_NONBLOCK);
 
     if(fd < 0) {
         //
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Unable to open named pipe: %s, Error: %s\n", file_path, strerror(errno));
-        push_to_queue(buf);
+        push_to_queue(buf, false);
     } else {
         while(!q.empty()){
             char * queued_buf = q.front();
             q.pop_front();
             int status = write_to_file(fd, queued_buf);
             if(status < 0) {
-                push_to_queue(queued_buf);
+                push_to_queue(queued_buf, true);
                 break;
             }
         }
         int status = write_to_file(fd, buf);
         if(status < 0) {
-            push_to_queue(buf);
+            push_to_queue(buf, false);
         }
         
     }
     close(fd);
-    unique_lock<mutex> lck(mtx);
-
 }
 
 
@@ -160,10 +158,8 @@ void dispatcher::run() {
         processed = true;
     }
 }
+void dispatcher::stop() {
+    
+}
 */
 
-void dispatcher::stop() {
-    unique_lock<mutex> lck(mtx);
-    done = true;
-    cv.notify_all();
-}

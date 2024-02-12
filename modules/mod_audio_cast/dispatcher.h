@@ -31,13 +31,13 @@ class dispatcher {
         const char * dir = "/tmp/mod-audio-cast-pipe/";
         char * file_path;
         void push_to_queue(char * buf,  bool push_to_front);
-        int write_to_file(int fd, char * buf)
+        int write_to_file(int fd, char * buf);
     public:
         dispatcher(char * uuid);
         ~dispatcher();
         void dispatch(payload * p);
         //void run();
-        void stop();
+        //void stop();
         /*static dispatcher * get_instance() {
             static dispatcher * instance;
             if (instance == NULL) {
