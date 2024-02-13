@@ -1,0 +1,1 @@
+Rust program that will read from dispatcher and send data over GRPC
