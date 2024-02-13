@@ -25,7 +25,7 @@ use crate::mcs::Payload;
 
 const PIPE_DIR: &str = "/tmp/mod-audio-cast-pipes";
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 10)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 20)]
 async fn main() {
     tracing_subscriber::fmt::init();
     let address_client = Arc::new(Mutex::new(HashMap::new()));
@@ -44,7 +44,7 @@ async fn main() {
     warp::serve(start_cast).run(([127, 0, 0, 1], 3030)).await;
 }
 
-#[instrument]
+//#[instrument]
 async fn start_cast_handler(
     body: HashMap<String, String>,
     address_client: Arc<Mutex<HashMap<String, MultiCastServiceClient<tonic::transport::Channel>>>>,
@@ -104,7 +104,7 @@ async fn start_cast_handler(
     create_named_pipe(uuid.clone()).unwrap();
     tokio::spawn(async move {
         let mut fd = open_named_pipe(uuid.clone()).unwrap();
-        let mut buf = [0; 80640];
+        let mut buf = [0; 134400];
         let mut remaining = 0;
         let mut done = false;
         let mut ms_100 = 0;
@@ -137,7 +137,7 @@ async fn start_cast_handler(
                             remaining = n - pos;
                             //info!("remaining: {}", remaining);
                             // copy the remaining bytes to a separate slice
-                            let mut remaining_buf = [0; 80640];
+                            let mut remaining_buf = [0; 134400];
                             remaining_buf[..remaining].copy_from_slice(&buf[pos..n]);
                             buf[..remaining].copy_from_slice(&remaining_buf[..remaining]);
                             break;
