@@ -176,8 +176,10 @@ void dispatcher::stop() {
             if(status < 0) {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Failed to write data on stop for file %s\n", file_path);
             }
+            delete[] queued_buf;
         }
         close(fd);
+        q=nullptr;
     }
 }
 
