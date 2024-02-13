@@ -179,7 +179,6 @@ void dispatcher::stop() {
             delete[] queued_buf;
         }
         close(fd);
-        q=nullptr;
     }
 }
 
