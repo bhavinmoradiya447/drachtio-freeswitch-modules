@@ -25,7 +25,7 @@ use crate::mcs::Payload;
 
 const PIPE_DIR: &str = "/tmp/mod-audio-cast-pipes";
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 20)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 50)]
 async fn main() {
     tracing_subscriber::fmt::init();
     let address_client = Arc::new(Mutex::new(HashMap::new()));
@@ -55,7 +55,9 @@ async fn start_cast_handler(
     info!("Starting cast for uuid: {}, address: {}", uuid, address);
 
     let mut address_client = address_client.lock().await;
-    let mut client = match address_client.get(&address) {
+    let mut client =  connect(address.clone()).await.unwrap();
+    let mut client2 = client.clone();
+   /* let mut client = match address_client.get(&address) {
         Some(client) => client.clone(),
         None => {
             info!("connecting to address: {}", address);
@@ -63,7 +65,7 @@ async fn start_cast_handler(
             address_client.insert(address.clone(), client.clone());
             client
         }
-    };
+    };*/
     let uuid_channel1 = uuid_channel.clone();
     let mut uuid_channel = uuid_channel.lock().await;
     let mut new_sender = false;
@@ -74,7 +76,7 @@ async fn start_cast_handler(
             info!("creating broadcast channel for uuid: {}", uuid);
             // let (sender, rx) = broadcast::channel::<Payload>(1000);
             // create unbounded broadcast channel
-            let (sender, rx) = broadcast::channel(100);
+            let (sender, rx) = broadcast::channel(3000);
             drop(rx);
             uuid_channel.insert(uuid.clone(), sender.clone());
             new_sender = true;
@@ -97,6 +99,7 @@ async fn start_cast_handler(
         };
         let request = tonic::Request::new(payload_stream);
         let _response = client.listen(request).await.unwrap();
+
     });
 
     if new_sender {
@@ -104,7 +107,7 @@ async fn start_cast_handler(
     create_named_pipe(uuid.clone()).unwrap();
     tokio::spawn(async move {
         let mut fd = open_named_pipe(uuid.clone()).unwrap();
-        let mut buf = [0; 134400];
+        let mut buf = [0; 336000];
         let mut remaining = 0;
         let mut done = false;
         let mut ms_100 = 0;
@@ -127,9 +130,9 @@ async fn start_cast_handler(
                 }
                 // if size is greater than 0, parse the header
                 Ok(n) if n > 0 => {
-                    /* if n!= 32 && n != 672 {
+                     if n > 67200 {
                          info!("read {} bytes", n);
-                     }*/
+                     }
                     let mut pos = 0;
                     loop {
                         let (payload, new_pos) = parse_payload(&buf, pos, n);
@@ -137,7 +140,7 @@ async fn start_cast_handler(
                             remaining = n - pos;
                             //info!("remaining: {}", remaining);
                             // copy the remaining bytes to a separate slice
-                            let mut remaining_buf = [0; 134400];
+                            let mut remaining_buf = [0; 336000];
                             remaining_buf[..remaining].copy_from_slice(&buf[pos..n]);
                             buf[..remaining].copy_from_slice(&remaining_buf[..remaining]);
                             break;
@@ -173,6 +176,7 @@ async fn start_cast_handler(
         }
         // sleep for 5 ms
         tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
+        drop(fd);
         info!("closing named pipe for uuid: {}, delay: 100+ms : {} , 500+ms: {}, 1+Sec: {}, 2+Sec: {}, 3+Sec {}", uuid.clone(),
         ms_100, ms_500, ms_1000, ms_2000, ms_3000);
         close_named_pipe(uuid.clone()).unwrap();
@@ -181,6 +185,7 @@ async fn start_cast_handler(
          uuid_channel1.remove(&uuid1);
          // close broadcast channel for this uuid
          drop(sender);
+         drop(client2);
     });
     };
 
