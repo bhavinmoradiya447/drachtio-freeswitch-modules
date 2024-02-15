@@ -2,8 +2,8 @@
 
 dispatcher::dispatcher(char * uuid) {
     file_path = switch_mprintf("%s%s", dir, uuid);
-    mkfifo(file_path, 0666);
-    fd = open(file_path, O_WRONLY | O_NONBLOCK);
+    //mkfifo(file_path, 0666);
+    fd = open(file_path, O_CREAT | O_WRONLY, 0666);
 }
 
 dispatcher::~dispatcher() {
