@@ -151,7 +151,7 @@ async fn start_cast_handler(
                         let milliseconds_timestamp = duration_since_epoch.as_millis() as u64;
                         //println!("[trace] sending payload for {} with delay {}", payload.uuid, (milliseconds_timestamp - payload.timestamp));
                         let delay = milliseconds_timestamp - payload.timestamp;
-                        sender.send(payload).unwrap();
+                        //sender.send(payload).unwrap();
                         if delay > 100 && delay < 500 {
                             ms_100 += 1;
                         } else if delay > 500 && delay < 1000 { ms_500 += 1; } else if delay > 1000 && delay < 2000 { ms_1000 += 1; } else if delay > 2000 && delay < 3000 { ms_2000 += 1; } else if delay > 2000 { ms_3000 += 1; }
