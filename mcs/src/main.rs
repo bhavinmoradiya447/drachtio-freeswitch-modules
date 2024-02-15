@@ -8,6 +8,7 @@ use std::io::ErrorKind;
 use std::io::Read;
 use std::process::Command;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 use warp::Filter;
@@ -114,6 +115,11 @@ async fn start_cast_handler(
             let mut buf = [0; 336000];
             let mut remaining = 0;
             let mut done = false;
+            let mut ms_100 = 0;
+            let mut ms_500 = 0;
+            let mut ms_1000 = 0;
+            let mut ms_2000 = 0;
+            let mut ms_3000 = 0;
             while !done {
                 tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                 tokio::task::yield_now().await;
@@ -144,8 +150,17 @@ async fn start_cast_handler(
                                 break;
                             }
                             let size = payload.size;
-                            info!("got uuid {}, seq {}, timestamp {}, size {}", payload.uuid, payload.seq, payload.timestamp, payload.size);
+                            //info!("got uuid {}, seq {}, timestamp {}, size {}", payload.uuid, payload.seq, payload.timestamp, payload.size);
+                            let current_system_time = SystemTime::now();
+                            let duration_since_epoch = current_system_time.duration_since(UNIX_EPOCH).unwrap();
+                            let milliseconds_timestamp = duration_since_epoch.as_millis() as u64;
+                            //println!("[trace] sending payload for {} with delay {}", payload.uuid, (milliseconds_timestamp - payload.timestamp));
+                            let delay = milliseconds_timestamp - payload.timestamp;
                             sender.send(payload).unwrap();
+                            if delay > 100 && delay < 500 {
+                                ms_100 += 1;
+                            } else if delay > 500 && delay < 1000 { ms_500 += 1; } else if delay > 1000 && delay < 2000 { ms_1000 += 1; } else if delay > 2000 && delay < 3000 { ms_2000 += 1; } else if delay > 2000 { ms_3000 += 1; }
+                            
                             if size == 0 {
                                 done = true;
                                 break;
@@ -167,7 +182,9 @@ async fn start_cast_handler(
             }
             // sleep for 5 ms
             tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
-            info!("closing named pipe for uuid: {}", uuid.clone());
+            drop(fd);
+            info!("closing named pipe for uuid: {}, delay: 100+ms : {} , 500+ms: {}, 1+Sec: {}, 2+Sec: {}, 3+Sec {}", uuid.clone(),
+                    ms_100, ms_500, ms_1000, ms_2000, ms_3000);
             close_named_pipe(uuid.clone()).unwrap();
             // remove uuid from uuid channel list
             let mut uuid_channel1 = uuid_channel1.lock().await;
