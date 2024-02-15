@@ -24,7 +24,7 @@ namespace {
     tech_pvt->channels = channels;
     tech_pvt->id = ++idxCallCount;
     tech_pvt->audio_paused = 0;
-	  tech_pvt->seq=0;
+	  tech_pvt->seq=1;
 	  tech_pvt->disp = static_cast<void *>(new dispatcher(switch_core_session_get_uuid(session)));
 	  tech_pvt->audio_masked = 0;
 	  tech_pvt->graceful_shutdown = 0;

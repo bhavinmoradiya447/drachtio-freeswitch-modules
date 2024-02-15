@@ -30,8 +30,12 @@ class dispatcher {
         int fd;
         const char * dir = "/tmp/mod-audio-cast-pipes/";
         char * file_path;
+        int batch_size = 5;
+        char *batch_buf = nullptr;
+        int batch_buf_len = 0;
         void push_to_queue(char * buf);
         int write_to_file(int fd, char * buf);
+        char* concat(char* a, size_t a_size,char* b, size_t b_size);
     public:
         dispatcher(char * uuid);
         ~dispatcher();
