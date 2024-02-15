@@ -69,20 +69,19 @@ void dispatcher::dispatch(payload * p) {
     if(fd < 0) {
         //
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Unable to open named pipe: %s, Error: %s\n", file_path, strerror(errno));
-        push_to_queue(buf, false);
+        push_to_queue(buf);
     } else {
         while(!q.empty()){
             char * queued_buf = q.front();
-            q.pop_front();
             int status = write_to_file(fd, queued_buf);
             if(status < 0) {
-                push_to_queue(queued_buf, true);
                 break;
             }
+            q.pop();            
         }
         int status = write_to_file(fd, buf);
         if(status < 0) {
-            push_to_queue(buf, false);
+            push_to_queue(buf);
         }
         
     }
@@ -91,18 +90,14 @@ void dispatcher::dispatch(payload * p) {
 
 
 
-void dispatcher::push_to_queue(char * buf, bool push_to_front) {
+void dispatcher::push_to_queue(char * buf) {
     if(q.size() > QUEUE_MAX_SIZE) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] queue for %s is fulled, ignoring audio stream\n", file_path);
         delete[] buf;
         return;
     } else {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[ERROR] Pushing to Queue, Queue Size :%d\n", q.size());
-        if(push_to_front) {
-            q.push_front(buf);
-        }else {
-            q.push_back(buf);
-        }
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[DEBUG] Pushing to Queue, Queue Size :%d\n", q.size());
+        q.push(buf);        
     }
 }
 
@@ -173,7 +168,7 @@ void dispatcher::stop() {
      if(fd>0){
          while(!q.empty()){
             char * queued_buf = q.front();
-            q.pop_front();
+            q.pop();
             int status = write_to_file(fd, queued_buf);
             if(status < 0) {
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Failed to write data on stop for file %s\n", file_path);
@@ -183,7 +178,7 @@ void dispatcher::stop() {
         close(fd);
     } else {
         char * queued_buf = q.front();
-        q.pop_front();
+        q.pop();
         delete[] queued_buf;
     }
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[INFO] Stopped streaming and closed file %s\n", file_path);

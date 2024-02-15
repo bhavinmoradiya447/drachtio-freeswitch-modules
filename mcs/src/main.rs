@@ -54,7 +54,7 @@ async fn start_cast_handler(
     let address = body.get("address").unwrap().clone();
     info!("Starting cast for uuid: {}, address: {}", uuid, address);
 
-    let mut address_client = address_client.lock().await;
+    /*let mut address_client = address_client.lock().await;
     let mut client =  connect(address.clone()).await.unwrap();
     let mut client2 = client.clone();
    /* let mut client = match address_client.get(&address) {
@@ -102,7 +102,7 @@ async fn start_cast_handler(
 
     });
 
-    if new_sender {
+    if new_sender {*/
     let uuid1 = uuid.clone();
     create_named_pipe(uuid.clone()).unwrap();
     tokio::spawn(async move {
@@ -181,13 +181,13 @@ async fn start_cast_handler(
         ms_100, ms_500, ms_1000, ms_2000, ms_3000);
         close_named_pipe(uuid.clone()).unwrap();
         // remove uuid from uuid channel list
-        let mut uuid_channel1 = uuid_channel1.lock().await;
+        /*let mut uuid_channel1 = uuid_channel1.lock().await;
          uuid_channel1.remove(&uuid1);
          // close broadcast channel for this uuid
          drop(sender);
-         drop(client2);
+         drop(client2);*/
     });
-    };
+    //};
 
     info!("replying ok");
     Ok(warp::reply::json(&"ok"))

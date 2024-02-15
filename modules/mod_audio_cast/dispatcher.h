@@ -1,7 +1,7 @@
 #ifndef DISPATCHER_H
 #define DISPATCHER_H
 
-#include <list>
+#include <queue>
 #include <mutex>
 #include <condition_variable>
 #include <iostream>
@@ -26,11 +26,11 @@ struct payload {
 
 class dispatcher {
     private:
-        list<char *> q;
+        queue<char *> q;
         int fd;
         const char * dir = "/tmp/mod-audio-cast-pipes/";
         char * file_path;
-        void push_to_queue(char * buf,  bool push_to_front);
+        void push_to_queue(char * buf);
         int write_to_file(int fd, char * buf);
     public:
         dispatcher(char * uuid);
