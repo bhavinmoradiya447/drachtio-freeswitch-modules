@@ -3,18 +3,24 @@ use warp::http::Uri;
 
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
-use std::io::Error;
+use std::{fs, io, thread};
+use std::io::{BufReader, Error};
 use std::io::ErrorKind;
 use std::io::Read;
+use std::pin::Pin;
 use std::process::Command;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::task::{Context, Poll};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::pin;
 use tokio::sync::Mutex;
+use tokio_stream::{Stream, StreamExt};
 use uuid::Uuid;
 use warp::Filter;
 
 use tracing::{error, info, instrument, trace};
 use tracing_subscriber;
+use unix_named_pipe::FileFIFOExt;
 
 pub mod mcs {
     tonic::include_proto!("mcs");
@@ -25,7 +31,7 @@ use crate::mcs::Payload;
 
 const PIPE_DIR: &str = "/tmp/mod-audio-cast-pipes";
 
-#[tokio::main(flavor = "multi_thread", worker_threads = 50)]
+#[tokio::main(flavor = "multi_thread", worker_threads = 100)]
 async fn main() {
     tracing_subscriber::fmt::init();
     let address_client = Arc::new(Mutex::new(HashMap::new()));
@@ -54,18 +60,18 @@ async fn start_cast_handler(
     let address = body.get("address").unwrap().clone();
     info!("Starting cast for uuid: {}, address: {}", uuid, address);
 
-    /*let mut address_client = address_client.lock().await;
-    let mut client =  connect(address.clone()).await.unwrap();
+    let mut address_client = address_client.lock().await;
+    let mut client = connect(address.clone()).await.unwrap();
     let mut client2 = client.clone();
-   /* let mut client = match address_client.get(&address) {
-        Some(client) => client.clone(),
-        None => {
-            info!("connecting to address: {}", address);
-            let client = connect(address.clone()).await.unwrap();
-            address_client.insert(address.clone(), client.clone());
-            client
-        }
-    };*/
+    /* let mut client = match address_client.get(&address) {
+         Some(client) => client.clone(),
+         None => {
+             info!("connecting to address: {}", address);
+             let client = connect(address.clone()).await.unwrap();
+             address_client.insert(address.clone(), client.clone());
+             client
+         }
+     };*/
     let uuid_channel1 = uuid_channel.clone();
     let mut uuid_channel = uuid_channel.lock().await;
     let mut new_sender = false;
@@ -99,100 +105,50 @@ async fn start_cast_handler(
         };
         let request = tonic::Request::new(payload_stream);
         let _response = client.listen(request).await.unwrap();
-
     });
 
-    if new_sender {*/
-    let uuid1 = uuid.clone();
-    create_named_pipe(uuid.clone()).unwrap();
-    tokio::spawn(async move {
-        let mut fd = open_named_pipe(uuid.clone()).unwrap();
-        let mut buf = [0; 336000];
-        let mut remaining = 0;
-        let mut done = false;
-        let mut ms_100 = 0;
-        let mut ms_500 = 0;
-        let mut ms_1000 = 0;
-        let mut ms_2000 = 0;
-        let mut ms_3000 = 0;
+    if new_sender {
+        let uuid1 = uuid.clone();
+        //create_named_pipe(uuid.clone()).unwrap();
+        tokio::spawn(async move {
+            let fd = open_named_pipe(uuid.clone()).unwrap();
 
-        while !done {
-            tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
-            tokio::task::yield_now().await;
-            let ret = fd.read(&mut buf[remaining..]);
-            match ret {
-                Ok(n) if n == 0 => {
-                    // sleep for 2 milliseconds
-                    //std::thread::sleep(std::time::Duration::from_millis(2));
-                    // yield to other tasks
-                    //tokio::task::yield_now().await;
-                    continue;
-                }
-                // if size is greater than 0, parse the header
-                Ok(n) if n > 0 => {
-                     if n > 67200 {
-                         info!("read {} bytes", n);
-                     }
-                    let mut pos = 0;
-                    loop {
-                        let (payload, new_pos) = parse_payload(&buf, pos, n);
-                        if new_pos == 0 {
-                            remaining = n - pos;
-                            //info!("remaining: {}", remaining);
-                            // copy the remaining bytes to a separate slice
-                            let mut remaining_buf = [0; 336000];
-                            remaining_buf[..remaining].copy_from_slice(&buf[pos..n]);
-                            buf[..remaining].copy_from_slice(&remaining_buf[..remaining]);
-                            break;
-                        }
-                        let size = payload.size;
-                        let current_system_time = SystemTime::now();
-                        let duration_since_epoch = current_system_time.duration_since(UNIX_EPOCH).unwrap();
-                        let milliseconds_timestamp = duration_since_epoch.as_millis() as u64;
-                        //println!("[trace] sending payload for {} with delay {}", payload.uuid, (milliseconds_timestamp - payload.timestamp));
-                        let delay = milliseconds_timestamp - payload.timestamp;
-                        //sender.send(payload).unwrap();
-                        if delay > 100 && delay < 500 {
-                            ms_100 += 1;
-                        } else if delay > 500 && delay < 1000 { ms_500 += 1; } else if delay > 1000 && delay < 2000 { ms_1000 += 1; } else if delay > 2000 && delay < 3000 { ms_2000 += 1; } else if delay > 2000 { ms_3000 += 1; }
-                        if size == 0 {
-                            done = true;
-                            break;
-                        }
-                        if new_pos == n {
-                            remaining = 0;
-                            break;
-                        }
-                        pos = new_pos;
+            let mut file_stream = FileReaderStream::new(BufReader::new(fd))
+                .throttle(Duration::from_millis(100));
+            pin!(file_stream);
+            while let Some(item) = file_stream.next().await {
+                for payload in item {
+                    let uuid = payload.uuid.clone();
+                    let seq = payload.seq.clone();
+                    match sender.send(payload) {
+                        Ok(n) => trace!("pushed seq {} for call leg {}",
+                        seq,
+                        uuid ),
+                        Err(err) => error!(
+                            "Failed to push seq {} for call leg {}, error {}",seq,uuid, err)
                     }
                 }
-                Err(e) => {
-                    error!("unable to read header bytes: {}", e);
-                    break;
-                    // return Err(e);
-                }
-                _ => {}
             }
-        }
-        // sleep for 5 ms
-        tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
-        drop(fd);
-        info!("closing named pipe for uuid: {}, delay: 100+ms : {} , 500+ms: {}, 1+Sec: {}, 2+Sec: {}, 3+Sec {}", uuid.clone(),
-        ms_100, ms_500, ms_1000, ms_2000, ms_3000);
-        close_named_pipe(uuid.clone()).unwrap();
-        // remove uuid from uuid channel list
-        /*let mut uuid_channel1 = uuid_channel1.lock().await;
-         uuid_channel1.remove(&uuid1);
-         // close broadcast channel for this uuid
-         drop(sender);
-         drop(client2);*/
-    });
-    //};
+            // sleep for 5 ms
+            tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
+            //info!("closing named pipe for uuid: {}, delay: 100+ms : {} , 500+ms: {}, 1+Sec: {}, 2+Sec: {}, 3+Sec {}", uuid.clone(),
+            // ms_100, ms_500, ms_1000, ms_2000, ms_3000);
+            info!("Closing named pipe for uuid: {}", uuid1);
+
+            close_named_pipe(uuid.clone()).unwrap();
+            // remove uuid from uuid channel list
+            let mut uuid_channel1 = uuid_channel1.lock().await;
+            uuid_channel1.remove(&uuid1);
+            // close broadcast channel for this uuid
+            drop(sender);
+            drop(client2);
+        });
+    };
 
     info!("replying ok");
     Ok(warp::reply::json(&"ok"))
 }
-
+/*
 fn parse_header(buf: &[u8], start_pos: usize) -> Result<Payload, Error> {
     trace!("parsing header from: {} ", start_pos);
     let mut payload = Payload::default();
@@ -230,6 +186,31 @@ fn parse_payload(buf: &[u8], start_pos: usize, end_pos: usize) -> (Payload, usiz
     (payload, new_pos)
 }
 
+ */
+
+fn parse_header(header_buf: &[u8]) -> Result<Payload, Error> {
+    let mut pos = 0;
+    let mut id = [0; 16];
+    id.copy_from_slice(&header_buf[pos..pos + 16]);
+    pos += 16;
+    let uuid = Uuid::from_bytes(id).to_string();
+    let seq = u32::from_ne_bytes(header_buf[pos..pos + 4].try_into().unwrap());
+    pos += 4;
+    let timestamp = u64::from_ne_bytes(header_buf[pos..pos + 8].try_into().unwrap());
+    pos += 8;
+    let size = u32::from_ne_bytes(header_buf[pos..pos + 4].try_into().unwrap());
+
+    let payload = Payload {
+        uuid: uuid.clone(),
+        seq: seq,
+        timestamp: timestamp,
+        size: size,
+        audio: vec![],
+    };
+    // println!("[trace] uuid: {}, seq: {}, size: {}", uuid, seq, size);
+    Ok(payload)
+}
+
 async fn connect(
     address: String,
 ) -> Result<MultiCastServiceClient<tonic::transport::Channel>, Error> {
@@ -247,11 +228,7 @@ async fn connect(
 fn close_named_pipe(uuid: String) -> Result<(), Error> {
     let pipe_path = format!("{}/{}", PIPE_DIR, uuid);
     info!("closing named pipe: {}", pipe_path);
-    // delete the named pipe
-    Command::new("rm")
-        .arg(pipe_path)
-        .output()
-        .expect("[error] Failed to delete named pipe");
+    fs::remove_file(&pipe_path).expect(&*format!("could not remove pipe file {}", pipe_path));
     Ok(())
 }
 
@@ -271,12 +248,167 @@ fn open_named_pipe(uuid: String) -> Result<File, Error> {
     // Open the named pipe /tmp/mod-audio-cast-pipes/{uuid} in read mode
     let pipe_path = format!("{}/{}", PIPE_DIR, uuid);
     info!("opening named pipe: {}", pipe_path);
-    let fd = match OpenOptions::new().read(true).open(pipe_path.clone()) {
-        Ok(file) => file,
-        Err(e) => {
-            error!("unable to open named pipe: {}", e);
-            return Err(e);
+
+    let pipe = unix_named_pipe::open_read(&pipe_path);
+    if let Err(err) = pipe {
+        return match err.kind() {
+            ErrorKind::NotFound => {
+                info!("creating pipe at: {:?}", pipe_path);
+                unix_named_pipe::create(&pipe_path, Some(0o660))?;
+
+                // Note that this has the possibility to recurse forever if creation `open_write`
+                // fails repeatedly with `io::ErrorKind::NotFound`, which is certainly not nice behaviour.
+                open_named_pipe(uuid)
+            }
+            _ => {
+                Err(err)
+            }
+        };
+    }
+
+    let pipe_file = pipe.unwrap();
+    let is_fifo = pipe_file
+        .is_fifo()
+        .expect("could not read type of file at pipe path");
+    if !is_fifo {
+        return Err(Error::new(
+            ErrorKind::Other,
+            format!(
+                "expected file at {:?} to be fifo, is actually {:?}",
+                pipe_path,
+                pipe_file.metadata()?.file_type(),
+            ),
+        ));
+    }
+
+    Ok(pipe_file)
+}
+
+
+#[derive(Debug)]
+pub struct FileReaderStream {
+    reader: BufReader<File>,
+    data: Vec<u8>,
+    done: bool,
+    ms_200: usize,
+    ms_500: usize,
+    ms_1000: usize,
+    ms_2000: usize,
+    ms_3000: usize,
+
+}
+
+impl FileReaderStream {
+    pub fn new(file_buffer: BufReader<File>) -> Self {
+        Self { reader: file_buffer, data: vec![], done: false, ms_200: 0, ms_500: 0, ms_1000: 0, ms_2000: 0, ms_3000: 0 }
+    }
+}
+
+impl Stream for FileReaderStream {
+    type Item = Vec<Payload>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        match self.done {
+            true => Poll::Ready(None),
+            false => {
+                let mut new_data = vec![];
+                let res = self.reader.read_to_end(&mut new_data);
+                return match res {
+                    Err(err) => match err.kind() {
+                        ErrorKind::WouldBlock => {
+                            let waker = cx.waker().clone();
+                            thread::spawn(move || {
+                                thread::sleep(Duration::from_millis(20));
+                                waker.wake();
+                            });
+                            info!("Block for data to be available");
+                            drop(new_data);
+                            Poll::Pending
+                        }
+                        _ => {
+                            error!("error while reading from pipe: {:?}", err);
+                            drop(new_data);
+                            Poll::Ready(None)
+                        }
+                    }
+                    Ok(n) => if n == 0 {
+                        info!("Got Empty data");
+                        let waker = cx.waker().clone();
+                        thread::spawn(move || {
+                            thread::sleep(Duration::from_millis(20));
+                            waker.wake();
+                        });
+                        drop(new_data);
+                        Poll::Pending
+                    } else {
+                        // let payload: Message = json::from_str(&line).expect("could not deserialize line");
+                        // if n > 67200 {
+                        let mut sender = vec![];
+                        self.data.append(&mut new_data);
+                        drop(new_data);
+                        trace!("Got Data with Size {}, data len: {}", n, self.data.len());
+                        while self.data.len() >= 32 {
+                            let mut remaining = self.data.split_off(32);
+                            //let mut header = Vec::new();
+                            //header.append(&mut data);
+                            let mut header_copy = self.data.clone();
+                            let header_buf: [u8; 32] = self.data.clone().try_into().unwrap();
+                            //header.try_into().unwrap_or_else(|v: Vec<u8>| panic!("Expected a Vec of length {} but it was {}", 32, v.len()));
+                            let mut payload = parse_header(&header_buf).unwrap();
+                            let size = payload.size as usize;
+                            //println!("uuid: {}, seq: {}, size: {}, remaining {}", payload.uuid, payload.seq, payload.size, remaining.len());
+                            if remaining.len() < size {
+                                self.data = vec![];
+                                self.data.append(&mut header_copy);
+                                self.data.append(&mut remaining);
+                                break;
+                            }
+
+                            let current_system_time = SystemTime::now();
+                            let duration_since_epoch = current_system_time.duration_since(UNIX_EPOCH).unwrap();
+                            let milliseconds_timestamp = duration_since_epoch.as_millis() as u64;
+                            let uuid = payload.uuid.clone();
+                            trace!("[trace] sending payload for {} , seq {}, size {}, with delay {}",
+                            uuid, payload.seq, payload.size, (milliseconds_timestamp - payload.timestamp));
+                            let delay = milliseconds_timestamp - payload.timestamp;
+                            if delay > 200 && delay < 500 {
+                                self.ms_200 += 1;
+                            } else if delay > 500 && delay < 1000 {
+                                self.ms_500 += 1;
+                            } else if delay > 1000 && delay < 2000 {
+                                self.ms_1000 += 1;
+                            } else if delay > 2000 && delay < 3000 {
+                                self.ms_2000 += 1;
+                            } else if delay > 2000 {
+                                self.ms_3000 += 1;
+                            }
+
+                            if size != 0 {
+                                if size == remaining.len() {
+                                    let mut payload_buf = vec![];
+                                    payload_buf.append(&mut remaining);
+                                    payload.audio = payload_buf;
+                                    self.data = vec![];
+                                    break;
+                                } else {
+                                    let mut rest_data = remaining.split_off(size);
+                                    payload.audio = remaining;
+                                    self.data = vec![];
+                                    self.data.append(&mut rest_data);
+                                }
+                                sender.push(payload);
+                            } else {
+                                info!("[trace] Delay for uuid {} : 200+ms: {}, 500+ms: {}, 1+Sec: {}, 2+Sec: {}, 3+Sec: {}",
+                                uuid, self.ms_200, self.ms_500, self.ms_1000, self.ms_2000, self.ms_3000);
+                                sender.push(payload);
+                                self.done = true;
+                                break;
+                            }
+                        }
+                        Poll::Ready(Some(sender))
+                    }
+                };
+            }
         }
-    };
-    Ok(fd)
+    }
 }

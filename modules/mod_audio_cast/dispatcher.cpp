@@ -62,9 +62,9 @@ void dispatcher::dispatch(payload * p) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] queued end of stream for file: %s\n", file_path);
     }
 
-    if(fd < 0){
-        fd = open(file_path, O_WRONLY | O_NONBLOCK);
-    }
+    //if(fd < 0){
+    fd = open(file_path, O_WRONLY | O_NONBLOCK);
+    //}
 
     if(fd < 0) {
         //
@@ -75,6 +75,7 @@ void dispatcher::dispatch(payload * p) {
             char * queued_buf = q.front();
             int status = write_to_file(fd, queued_buf);
             if(status < 0) {
+				close(fd);
                 break;
             }
             q.pop();            
@@ -83,7 +84,7 @@ void dispatcher::dispatch(payload * p) {
         if(status < 0) {
             push_to_queue(buf);
         }
-        
+        close(fd);
     }
     //close(fd);
 }
@@ -162,9 +163,9 @@ void dispatcher::run() {
 void dispatcher::stop() {
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[INFO] Stop streaming and closing file %s\n", file_path);
 
-    if(fd < 0){
+    //if(fd < 0){
         fd = open(file_path, O_WRONLY | O_NONBLOCK);
-    }
+    //}
      if(fd>0){
          while(!q.empty()){
             char * queued_buf = q.front();
@@ -184,5 +185,3 @@ void dispatcher::stop() {
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[INFO] Stopped streaming and closed file %s\n", file_path);
 
 }
-
-
