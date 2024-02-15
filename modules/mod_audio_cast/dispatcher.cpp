@@ -62,7 +62,7 @@ void dispatcher::dispatch(payload * p) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] queued end of stream for file: %s\n", file_path);
     }
 
-    if(p->seq % batch_size !=0) {
+    if(p->seq % batch_size !=0 && p->size !=0 ) {
         if(!batch_buf){
             batch_buf = (char*)realloc(buf, len);
             batch_buf_len = len;
@@ -71,8 +71,13 @@ void dispatcher::dispatch(payload * p) {
             batch_buf_len = batch_buf_len + len;
         }
     } else {
-        batch_buf = concat(batch_buf, batch_buf_len, buf, len);
-        batch_buf_len = batch_buf_len + len;
+         if(!batch_buf){
+            batch_buf = (char*)realloc(buf, len);
+            batch_buf_len = len;
+        } else {
+            batch_buf = concat(batch_buf, batch_buf_len, buf, len);
+            batch_buf_len = batch_buf_len + len;
+        }
 
         char* final_buf = new char[ batch_buf_len + sizeof(int)];
 
