@@ -83,8 +83,7 @@ void dispatcher::dispatch(payload * p) {
 
         memcpy(final_buf, &batch_buf_len, sizeof(int));
         memcpy(final_buf+sizeof(int), batch_buf, batch_buf_len);
-
-
+        delete[] batch_buf;
         if(fd < 0){
                 fd = open(file_path, O_WRONLY | O_NONBLOCK);
         }
@@ -119,7 +118,7 @@ void dispatcher::dispatch(payload * p) {
 char* dispatcher::concat(char* a, size_t a_size, char* b, size_t b_size) {
     char* c = (char*)realloc(a, a_size + b_size);
     memcpy(c + a_size, b,  b_size);  // dest is after "a" data, source is b with b_size
-    free(b);
+    delete[] b;
     return c;
 }
 
