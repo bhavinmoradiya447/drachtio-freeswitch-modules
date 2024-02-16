@@ -1,6 +1,8 @@
 #include "dispatcher.h"
 
 dispatcher::dispatcher(char * uuid) {
+    char *audio_buf_batch_size = std::getenv("MOD_AUDIO_CAST_BATCH_SIZE");
+    batch_size = std::max(5, (audio_buf_batch_size ? ::atoi(audio_buf_batch_size) : 5));
     file_path = switch_mprintf("%s%s", dir, uuid);
     mkfifo(file_path, 0666);
     fd = open(file_path, O_WRONLY | O_NONBLOCK);
