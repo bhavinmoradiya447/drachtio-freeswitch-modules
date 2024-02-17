@@ -32,10 +32,12 @@ class dispatcher {
         char * file_path;
         int batch_size = 5;
         char *batch_buf = nullptr;
+        unsigned int seq = 0;
         int batch_buf_len = 0;
         void push_to_queue(char * buf);
         int write_to_file(int fd, char * buf);
         char* concat(char* a, size_t a_size,char* b, size_t b_size);
+        void dispatch_to_file(char* buf, int size, uuid_t id, int seq, unsigned long timestamp);
     public:
         dispatcher(char * uuid);
         ~dispatcher();

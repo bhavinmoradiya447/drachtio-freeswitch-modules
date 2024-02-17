@@ -35,85 +35,86 @@ dispatcher::~dispatcher() {
 //     cv.notify_one();
 // }
 
-void dispatcher::dispatch(payload * p) {
-    // fixed size header 32 bytes
+void dispatcher::dispatch_to_file(char* audio_buf, int size, uuid_t id, int seq, unsigned long timestamp) {
     int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
     // compute buffer size
-    unsigned int len = header_size + p->size;
+    unsigned int len = header_size + size;
 
     // create buffer
     char * buf = new char[len];
     int pos = 0;
     // copy uuid to buffer
-    memcpy(buf + pos, &p->id, 16);
+    memcpy(buf + pos, id, 16);
     pos = pos + 16;
     // copy seq to buffer
-    memcpy(buf + pos, &p->seq, sizeof(int));
+    memcpy(buf + pos, &seq, sizeof(int));
     pos = pos + sizeof(int);
     // copy timestamp to buffer
-    memcpy(buf + pos, &p->timestamp, sizeof(long));
+    memcpy(buf + pos, &timestamp, sizeof(long));
     pos = pos + sizeof(long);
     // copy size to buffer
-    memcpy(buf + pos, &p->size, sizeof(int));
+    memcpy(buf + pos, &size, sizeof(int));
     pos = pos + sizeof(int);
     // copy payload to buffer
-    if (p->size > 0)
-    {
-        memcpy(buf + pos, p->buf, p->size);
+    if(size>0) {
+        memcpy(buf + pos, audio_buf, size);
+        delete[] audio_buf;
     } else {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] queued end of stream for file: %s\n", file_path);
     }
-
-    if(p->seq % batch_size !=0 && p->size !=0 ) {
-        if(!batch_buf){
-            batch_buf = (char*)realloc(buf, len);
-            batch_buf_len = len;
-        } else {
-            batch_buf = concat(batch_buf, batch_buf_len, buf, len);
-            batch_buf_len = batch_buf_len + len;
-        }
-    } else {
-         if(!batch_buf){
-            batch_buf = (char*)realloc(buf, len);
-            batch_buf_len = len;
-        } else {
-            batch_buf = concat(batch_buf, batch_buf_len, buf, len);
-            batch_buf_len = batch_buf_len + len;
-        }
-
-        char* final_buf = new char[ batch_buf_len + sizeof(int)];
-
-        memcpy(final_buf, &batch_buf_len, sizeof(int));
-        memcpy(final_buf+sizeof(int), batch_buf, batch_buf_len);
-        delete[] batch_buf;
-        if(fd < 0){
-                fd = open(file_path, O_WRONLY | O_NONBLOCK);
-        }
-
-        if(fd < 0) {
-            //
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Unable to open named pipe: %s, Error: %s\n", file_path, strerror(errno));
-            push_to_queue(final_buf);
-        } else {
-            while(!q.empty()){
-                char * queued_buf = q.front();
-                int status = write_to_file(fd, queued_buf);
-                if(status < 0) {
-                    break;
-                }
-                q.pop();            
-            }
-            int status = write_to_file(fd, final_buf);
-            if(status < 0) {
-                push_to_queue(final_buf);
-            }
-        }
-        batch_buf = nullptr;
-        batch_buf_len =0;
+    if(fd < 0){
+            fd = open(file_path, O_WRONLY | O_NONBLOCK);
     }
 
-
-   
+    if(fd < 0) {
+        //
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Unable to open named pipe: %s, Error: %s\n", file_path, strerror(errno));
+        push_to_queue(buf);
+    } else {
+        while(!q.empty()){
+            char * queued_buf = q.front();
+            int status = write_to_file(fd, queued_buf);
+            if(status < 0) {
+                break;
+            }
+            q.pop();            
+        }
+        int status = write_to_file(fd, buf);
+        if(status < 0) {
+            push_to_queue(buf);
+        }
+    }
+           
+}
+void dispatcher::dispatch(payload * p) {
+    
+    char * buf = new char[p->size];
+    memcpy(buf, p->buf, p->size);
+            
+    if(p->size !=0 ) {
+        if(!batch_buf){
+            //batch_buf = (char*)realloc(p->buf, p->size);
+            batch_buf = (char*)realloc(buf, p->size);
+            batch_buf_len = p->size;
+        } else {
+            batch_buf = concat(batch_buf, batch_buf_len, buf, p->size);
+            batch_buf_len = batch_buf_len + p->size;
+        }
+        if(p->seq % batch_size == 0) {
+        
+            // fixed size header 32 bytes
+            dispatch_to_file(batch_buf, batch_buf_len, p->id, seq++, p->timestamp);            
+            batch_buf = nullptr;
+            batch_buf_len =0;
+        }
+    } else {
+        if(batch_buf){
+            dispatch_to_file(batch_buf, batch_buf_len, p->id, seq++, p->timestamp);            
+            batch_buf = nullptr;
+            batch_buf_len =0;
+        }
+        dispatch_to_file(buf, p->size, p->id, seq++, p->timestamp);            
+    } 
     //close(fd);
 }
 
@@ -138,8 +139,10 @@ void dispatcher::push_to_queue(char * buf) {
 
 int dispatcher::write_to_file(int fd, char * buf) {
     int size;
-    memcpy(&size, buf, sizeof(int));
-    int ret = write(fd, buf + sizeof(int), size);
+    int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
+    int size_pos = 16 + sizeof(int) + sizeof(long);
+    memcpy(&size, buf + size_pos, sizeof(int));
+    int ret = write(fd, buf, header_size + size);
     if (ret < 0)
     {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error writing to pipe: %s, ERROR: %s\n", file_path, strerror(errno));
