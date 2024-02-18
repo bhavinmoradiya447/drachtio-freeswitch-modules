@@ -14,7 +14,7 @@
 #include <switch.h>
 
 using namespace std;
-#define QUEUE_MAX_SIZE 3000
+#define QUEUE_MAX_SIZE 200
 
 struct payload {
     uuid_t id;
