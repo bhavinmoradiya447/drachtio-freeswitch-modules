@@ -213,9 +213,11 @@ void dispatcher::stop() {
         }
         close(fd);
     } else {
-        char * queued_buf = q.front();
-        q.pop();
-        delete[] queued_buf;
+        while(!q.empty()) {
+            char * queued_buf = q.front();
+            q.pop();
+            delete[] queued_buf;
+        }
     }
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[INFO] Stopped streaming and closed file %s\n", file_path);
 
