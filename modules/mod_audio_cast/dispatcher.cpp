@@ -2,10 +2,19 @@
 
 dispatcher::dispatcher(char * uuid) {
     char *audio_buf_batch_size = std::getenv("MOD_AUDIO_CAST_BATCH_SIZE");
-    batch_size = std::max(5, (audio_buf_batch_size ? ::atoi(audio_buf_batch_size) : 5));
-    file_path = switch_mprintf("%s%s", dir, uuid);
-    mkfifo(file_path, 0666);
-    fd = open(file_path, O_WRONLY | O_NONBLOCK);
+    batch_size = std::max(1, (audio_buf_batch_size ? ::atoi(audio_buf_batch_size) : 1));
+    call_uuid = uuid;
+}
+
+int dispatcher::connet_ds_socket() {
+    if ((fd = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
+        perror("socket creation error");
+        return -1;
+    }
+    memset(&remote, 0, sizeof(remote));
+    remote.sun_family = AF_UNIX;
+    strcpy(remote.sun_path, sock_path);
+    return 1;
 }
 
 dispatcher::~dispatcher() {
@@ -35,7 +44,7 @@ dispatcher::~dispatcher() {
 //     cv.notify_one();
 // }
 
-void dispatcher::dispatch_to_file(char* audio_buf, int size, uuid_t id, int seq, unsigned long timestamp) {
+void dispatcher::dispatch_to_ds(char* audio_buf, int size, uuid_t id, int seq, unsigned long timestamp) {
     int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
     // compute buffer size
     unsigned int len = header_size + size;
@@ -60,30 +69,21 @@ void dispatcher::dispatch_to_file(char* audio_buf, int size, uuid_t id, int seq,
         memcpy(buf + pos, audio_buf, size);
         delete[] audio_buf;
     } else {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] queued end of stream for file: %s\n", file_path);
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] queued end of stream for: %s\n", call_uuid);
     }
-    if(fd < 0){
-            fd = open(file_path, O_WRONLY | O_NONBLOCK);
-    }
-
-    if(fd < 0) {
-        //
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Unable to open named pipe: %s, Error: %s\n", file_path, strerror(errno));
-        push_to_queue(buf);
-    } else {
-        while(!q.empty()){
-            char * queued_buf = q.front();
-            int status = write_to_file(fd, queued_buf);
-            if(status < 0) {
-                break;
-            }
-            q.pop();            
-        }
-        int status = write_to_file(fd, buf);
+    while(!q.empty()){
+        char * queued_buf = q.front();
+        int status = write_to_ds(fd, queued_buf);
         if(status < 0) {
-            push_to_queue(buf);
+            break;
         }
+        q.pop();            
     }
+    int status = write_to_ds(fd, buf);
+    if(status < 0) {
+        push_to_queue(buf);
+    }
+    
            
 }
 void dispatcher::dispatch(payload * p) {
@@ -103,17 +103,17 @@ void dispatcher::dispatch(payload * p) {
         if(p->seq % batch_size == 0) {
         
             // fixed size header 32 bytes
-            dispatch_to_file(batch_buf, batch_buf_len, p->id, seq++, p->timestamp);            
+            dispatch_to_ds(batch_buf, batch_buf_len, p->id, seq++, p->timestamp);            
             batch_buf = nullptr;
             batch_buf_len =0;
         }
     } else {
         if(batch_buf){
-            dispatch_to_file(batch_buf, batch_buf_len, p->id, seq++, p->timestamp);            
+            dispatch_to_ds(batch_buf, batch_buf_len, p->id, seq++, p->timestamp);            
             batch_buf = nullptr;
             batch_buf_len =0;
         }
-        dispatch_to_file(buf, p->size, p->id, seq++, p->timestamp);            
+        dispatch_to_ds(buf, p->size, p->id, seq++, p->timestamp);            
     } 
     //close(fd);
 }
@@ -128,7 +128,7 @@ char* dispatcher::concat(char* a, size_t a_size, char* b, size_t b_size) {
 
 void dispatcher::push_to_queue(char * buf) {
     if(q.size() > QUEUE_MAX_SIZE) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] queue for %s is fulled, ignoring audio stream\n", file_path);
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] queue for %s is fulled, ignoring audio stream\n", call_uuid);
         delete[] buf;
         return;
     } else {
@@ -137,18 +137,19 @@ void dispatcher::push_to_queue(char * buf) {
     }
 }
 
-int dispatcher::write_to_file(int fd, char * buf) {
+int dispatcher::write_to_ds(int fd, char * buf) {
     int size;
     int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
     int size_pos = 16 + sizeof(int) + sizeof(long);
     memcpy(&size, buf + size_pos, sizeof(int));
-    int ret = write(fd, buf, header_size + size);
-    if (ret < 0)
-    {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error writing to pipe: %s, ERROR: %s\n", file_path, strerror(errno));
-        return -1;
+
+    if (sendto(fd, buf, header_size + size, 0, (struct sockaddr *)&remote, sizeof(remote)) == -1) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error writing to Domain socket: %s, ERROR: %s\n", call_uuid, strerror(errno));
+            connet_ds_socket();
+            return -1;
     }
-    fsync(fd);
+
+    //fsync(fd);
     delete[] buf;
     buf = nullptr;
     return 1;
@@ -196,30 +197,21 @@ void dispatcher::run() {
 }
 */
 void dispatcher::stop() {
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[INFO] Stop streaming and closing file %s\n", file_path);
-
-    if(fd < 0){
-        fd = open(file_path, O_WRONLY | O_NONBLOCK);
-    }
-     if(fd>0){
-         while(!q.empty()){
-            char * queued_buf = q.front();
-            q.pop();
-            int status = write_to_file(fd, queued_buf);
-            if(status < 0) {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Failed to write data on stop for file %s\n", file_path);
-            }
-            delete[] queued_buf;
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[INFO] Stop streaming for %s\n", call_uuid);
+    while(!q.empty()){
+        char * queued_buf = q.front();
+        q.pop();
+        int status = write_to_ds(fd, queued_buf);
+        if(status < 0) {
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Failed to write data on stop for %s\n", call_uuid);
         }
+        delete[] queued_buf;
+    }
+    if(fd > 0) {
         close(fd);
-    } else {
-        while(!q.empty()) {
-            char * queued_buf = q.front();
-            q.pop();
-            delete[] queued_buf;
-        }
     }
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[INFO] Stopped streaming and closed file %s\n", file_path);
+    
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[INFO] Stopped streaming and closed Domain socket for %s\n", call_uuid);
 
 }
 

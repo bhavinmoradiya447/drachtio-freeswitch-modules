@@ -19,13 +19,19 @@ namespace {
   
     memset(tech_pvt, 0, sizeof(private_t));
   
+   dispatcher * disp = new dispatcher(switch_core_session_get_uuid(session));
+   if(!disp->connet_ds_socket()){
+    switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Failed to open Domain Socket for %s\n", switch_core_session_get_uuid(session));
+    return SWITCH_STATUS_FALSE;
+   }
+
    strncpy(tech_pvt->sessionId, switch_core_session_get_uuid(session), MAX_SESSION_ID);
     tech_pvt->sampling = desiredSampling;
     tech_pvt->channels = channels;
     tech_pvt->id = ++idxCallCount;
     tech_pvt->audio_paused = 0;
 	  tech_pvt->seq=1;
-	  tech_pvt->disp = static_cast<void *>(new dispatcher(switch_core_session_get_uuid(session)));
+	  tech_pvt->disp = static_cast<void *>(disp);
 	  tech_pvt->audio_masked = 0;
 	  tech_pvt->graceful_shutdown = 0;
     strncpy(tech_pvt->bugname, bugname, MAX_BUG_LEN);

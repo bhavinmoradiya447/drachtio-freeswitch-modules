@@ -12,6 +12,9 @@
 #include <cstring>
 #include <uuid/uuid.h>
 #include <switch.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 using namespace std;
 #define QUEUE_MAX_SIZE 200
@@ -28,19 +31,21 @@ class dispatcher {
     private:
         queue<char *> q;
         int fd;
-        const char * dir = "/tmp/mod-audio-cast-pipes/";
-        char * file_path;
+        const char * sock_path = "/tmp/test-mcs-ds.sock";
+        struct sockaddr_un remote;
         int batch_size = 5;
         char *batch_buf = nullptr;
         unsigned int seq = 0;
         int batch_buf_len = 0;
+        char * call_uuid;
         void push_to_queue(char * buf);
-        int write_to_file(int fd, char * buf);
+        int write_to_ds(int fd, char * buf);
         char* concat(char* a, size_t a_size,char* b, size_t b_size);
-        void dispatch_to_file(char* buf, int size, uuid_t id, int seq, unsigned long timestamp);
+        void dispatch_to_ds(char* buf, int size, uuid_t id, int seq, unsigned long timestamp);
     public:
         dispatcher(char * uuid);
         ~dispatcher();
+        int connet_ds_socket();
         void dispatch(payload * p);
         //void run();
         void stop();
