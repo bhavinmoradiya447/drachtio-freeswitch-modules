@@ -71,19 +71,7 @@ void dispatcher::dispatch_to_ds(char* audio_buf, int size, uuid_t id, int seq, u
     } else {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] queued end of stream for: %s\n", call_uuid);
     }
-    while(!q.empty()){
-        char * queued_buf = q.front();
-        int status = write_to_ds(fd, queued_buf);
-        if(status < 0) {
-            break;
-        }
-        q.pop();            
-    }
-    int status = write_to_ds(fd, buf);
-    if(status < 0) {
-        push_to_queue(buf);
-    }
-    
+    write_to_ds(fd, buf);
            
 }
 void dispatcher::dispatch(payload * p) {
@@ -126,18 +114,8 @@ char* dispatcher::concat(char* a, size_t a_size, char* b, size_t b_size) {
 }
 
 
-void dispatcher::push_to_queue(char * buf) {
-    if(q.size() > QUEUE_MAX_SIZE) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] queue for %s is fulled, ignoring audio stream\n", call_uuid);
-        delete[] buf;
-        return;
-    } else {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[DEBUG] Pushing to Queue, Queue Size :%d\n", q.size());
-        q.push(buf);        
-    }
-}
 
-int dispatcher::write_to_ds(int fd, char * buf) {
+void dispatcher::write_to_ds(int fd, char * buf) {
     int size;
     int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
     int size_pos = 16 + sizeof(int) + sizeof(long);
@@ -146,13 +124,10 @@ int dispatcher::write_to_ds(int fd, char * buf) {
     if (sendto(fd, buf, header_size + size, 0, (struct sockaddr *)&remote, sizeof(remote)) == -1) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error writing to Domain socket: %s, ERROR: %s\n", call_uuid, strerror(errno));
             connet_ds_socket();
-            return -1;
     }
-
     //fsync(fd);
     delete[] buf;
     buf = nullptr;
-    return 1;
 }
 
 /*
@@ -198,15 +173,6 @@ void dispatcher::run() {
 */
 void dispatcher::stop() {
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[INFO] Stop streaming for %s\n", call_uuid);
-    while(!q.empty()){
-        char * queued_buf = q.front();
-        q.pop();
-        int status = write_to_ds(fd, queued_buf);
-        if(status < 0) {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,"[ERROR] Failed to write data on stop for %s\n", call_uuid);
-        }
-        delete[] queued_buf;
-    }
     if(fd > 0) {
         close(fd);
     }

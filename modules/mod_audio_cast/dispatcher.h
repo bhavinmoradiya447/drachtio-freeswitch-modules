@@ -17,7 +17,6 @@
 #include <sys/un.h>
 
 using namespace std;
-#define QUEUE_MAX_SIZE 200
 
 struct payload {
     uuid_t id;
@@ -29,17 +28,15 @@ struct payload {
 
 class dispatcher {
     private:
-        queue<char *> q;
         int fd;
         const char * sock_path = "/tmp/test-mcs-ds.sock";
         struct sockaddr_un remote;
-        int batch_size = 5;
+        int batch_size = 1;
         char *batch_buf = nullptr;
         unsigned int seq = 0;
         int batch_buf_len = 0;
         char * call_uuid;
-        void push_to_queue(char * buf);
-        int write_to_ds(int fd, char * buf);
+        void write_to_ds(int fd, char * buf);
         char* concat(char* a, size_t a_size,char* b, size_t b_size);
         void dispatch_to_ds(char* buf, int size, uuid_t id, int seq, unsigned long timestamp);
     public:

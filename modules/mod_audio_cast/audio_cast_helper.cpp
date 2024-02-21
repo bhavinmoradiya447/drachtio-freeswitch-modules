@@ -4,6 +4,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <g711.h>
+
 
 namespace {
   static unsigned int idxCallCount = 0;
@@ -353,6 +355,22 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
     return send_dtmf(tech_pvt->mcsurl, text);
   }
 
+  switch_bool_t convert_linear2_g711_pcmu8k(char* frame, uint32_t* framelen) {
+      short *inbuf = (short *)frame;
+      uint32_t in_data_len = *framelen;
+      uint32_t outBufSize = in_data_len / sizeof(short);
+      unsigned char* obuf = (unsigned char*)  malloc(outBufSize);
+      uint32_t i;
+
+      for (i = 0; i < outBufSize; i++) {
+          obuf[i] = linear_to_ulaw(inbuf[i]);
+      }
+      memcpy(frame, obuf, outBufSize);
+      *framelen = i;
+      free(obuf);
+      return SWITCH_TRUE;
+  }
+
   switch_bool_t audio_cast_frame(switch_core_session_t *session, switch_media_bug_t *bug) {
     private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
 
@@ -369,6 +387,7 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
         
         while (switch_core_media_bug_read(bug, &frame, SWITCH_TRUE) == SWITCH_STATUS_SUCCESS) {
 //           write(fd, frame.data , frame.datalen);
+          convert_linear2_g711_pcmu8k((char *)frame.data, &frame.datalen);
           payload * p = new payload;
           uuid_parse(tech_pvt->sessionId, p->id);
           p->seq = tech_pvt->seq++;
@@ -386,6 +405,7 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
     return SWITCH_TRUE;
   
   }
+
 
 }
 
