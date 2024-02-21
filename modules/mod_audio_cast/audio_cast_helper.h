@@ -15,7 +15,7 @@ switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char 
 switch_status_t audio_cast_session_pauseresume(switch_core_session_t *session, char *bugname, int pause);
 switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, char *bugname, int mask);
 switch_status_t audio_cast_session_graceful_shutdown(switch_core_session_t *session, char *bugname);
+switch_bool_t convert_linear2_g711_pcmu8k(char* frame, uint32_t* framelen);
 switch_bool_t audio_cast_frame(switch_core_session_t *session, switch_media_bug_t *bug);
 switch_status_t audio_cast_session_sendtext(switch_core_session_t *session, char *bugname, char *text);
-switch_bool_t convert_linear2_g711_pcmu8k(char* frame, uint32_t* framelen);
 #endif
