@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <queue>
 
 using namespace std;
 
@@ -29,16 +30,15 @@ struct payload {
 class dispatcher {
     private:
         int fd;
+        queue<payload *> q;
         const char * sock_path = "/tmp/test-mcs-ds.sock";
         struct sockaddr_un remote;
         int batch_size = 1;
-        char *batch_buf = nullptr;
         unsigned int seq = 0;
         int batch_buf_len = 0;
         char * call_uuid;
-        void write_to_ds(int fd, char * buf);
-        char* concat(char* a, size_t a_size,char* b, size_t b_size);
-        void dispatch_to_ds(char* buf, int size, uuid_t id, int seq, unsigned long timestamp);
+        void write_to_ds(int fd, char * buf, int size);
+        void dispatch_to_ds(int size, uuid_t id, int seq, unsigned long timestamp);
     public:
         dispatcher(char * uuid);
         ~dispatcher();

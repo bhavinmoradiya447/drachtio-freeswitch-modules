@@ -239,7 +239,6 @@ switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char 
         dispatcher *disp = static_cast<dispatcher *>(tech_pvt->disp);
         disp->dispatch(p);
         disp->stop();
-        delete p; 
       }
     }
 
@@ -396,7 +395,6 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
           p->buf =  static_cast<char *>(frame.data);
           dispatcher *disp = static_cast<dispatcher *>(tech_pvt->disp);
           disp->dispatch(p);
-          delete p;
         }
 	  }
       
