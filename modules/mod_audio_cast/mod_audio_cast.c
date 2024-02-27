@@ -116,7 +116,7 @@ static switch_status_t start_capture(switch_core_session_t *session,
     bugname, sampling);
 
 	if ((bug = (switch_media_bug_t*)switch_channel_get_private(channel, bugname))) {
-		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "mod_audio_cast: bug %s already attached!\n", bugname);
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "mod_audio_cast: bug %s already attached!\n", bugname);
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "calling audio_cast_call_mcs.\n");
 		if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/start_cast")) {
 			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error sending start to mcs.\n");
