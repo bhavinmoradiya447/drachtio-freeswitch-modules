@@ -1,6 +1,7 @@
 #include "mod_audio_cast.h"
 #include "audio_cast_helper.h"
 
+
 /* Prototypes */
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_audio_cast_shutdown);
 SWITCH_MODULE_RUNTIME_FUNCTION(mod_audio_cast_runtime);
@@ -80,6 +81,7 @@ static switch_status_t do_stop(switch_core_session_t *session, char* bugname, ch
 	switch_status_t status = SWITCH_STATUS_SUCCESS;
 	switch_channel_t *channel = switch_core_session_get_channel(session);
     switch_media_bug_t *bug = (switch_media_bug_t*) switch_channel_get_private(channel, bugname);
+	const char* address = cJSON_GetObjectCstr(cJSON_Parse(payload), "address");
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "mod_audio_cast (%s): stop\n", bugname);
 	if (!bug) {
       switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "audio_cast_session_cleanup: no bug %s - websocket conection already closed\n", bugname);
@@ -87,11 +89,12 @@ static switch_status_t do_stop(switch_core_session_t *session, char* bugname, ch
     }
 	{
 		private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
-		tech_pvt->client_count--;
-		if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/stop_cast")) {
+
+		if (switch_core_hash_delete(tech_pvt->client_address_hash, address) != NULL && SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/stop_cast")) {
 			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error sending stop to mcs.\n");
 		}
-		if(tech_pvt->client_count==0){
+		
+		if(switch_hashtable_count(tech_pvt->client_address_hash) == 0){
 			status = audio_cast_session_cleanup(session, bugname, 0);
 		}
 	}
@@ -108,6 +111,7 @@ static switch_status_t start_capture(switch_core_session_t *session,
 	switch_media_bug_t *bug;
 	switch_status_t status;
 	switch_codec_t* read_codec;
+	const char* address = cJSON_GetObjectCstr(cJSON_Parse(payload), "address");
 
 	void *pUserData = NULL;
     int channels = (flags & SMBF_STEREO) ? 2 : 1;
@@ -116,16 +120,17 @@ static switch_status_t start_capture(switch_core_session_t *session,
     bugname, sampling);
 
 	if ((bug = (switch_media_bug_t*)switch_channel_get_private(channel, bugname))) {
-		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "mod_audio_cast: bug %s already attached!\n", bugname);
+		private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
+		int is_addreess_exists = switch_core_hash_find(tech_pvt->client_address_hash, address) != NULL;
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "calling audio_cast_call_mcs.\n");
-		if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/start_cast")) {
+
+		if (!is_addreess_exists 
+		&& SWITCH_STATUS_SUCCESS == switch_core_hash_insert(tech_pvt->client_address_hash, address, address) 
+		&& SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/start_cast")) {
 			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error sending start to mcs.\n");
 			return SWITCH_STATUS_FALSE;
 		}
-		{
-			private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
-			tech_pvt->client_count++;
-		}
+		
 		return SWITCH_STATUS_SUCCESS;
 	}
 
@@ -155,7 +160,10 @@ static switch_status_t start_capture(switch_core_session_t *session,
 	}
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "setting bug private data %s.\n", bugname);
 	switch_channel_set_private(channel, bugname, bug);
-
+	{
+		private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
+		switch_core_hash_insert(tech_pvt->client_address_hash, address, address);
+	}
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "exiting start_capture.\n");
 	return SWITCH_STATUS_SUCCESS;
 }

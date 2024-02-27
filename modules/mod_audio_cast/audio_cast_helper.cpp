@@ -36,7 +36,7 @@ namespace {
 	  tech_pvt->disp = static_cast<void *>(disp);
 	  tech_pvt->audio_masked = 0;
 	  tech_pvt->graceful_shutdown = 0;
-    tech_pvt->client_count = 1;
+    switch_core_hash_init_case(&tech_pvt->client_address_hash, SWITCH_FALSE);
     strncpy(tech_pvt->bugname, bugname, MAX_BUG_LEN);
     
 
@@ -59,6 +59,8 @@ namespace {
     if (tech_pvt->disp) {
       tech_pvt->disp = nullptr;
     }
+
+    switch_core_hash_destroy(&tech_pvt->client_address_hash);
   }
 }
 
