@@ -161,26 +161,26 @@ static switch_status_t start_capture(switch_core_session_t *session,
 }
 
 
-static switch_status_t do_sendtext(switch_core_session_t *session, char* bugname, char* text)
+static switch_status_t do_send(switch_core_session_t *session, char* bugname, char* payload)
 {
 	switch_status_t status = SWITCH_STATUS_SUCCESS;
 
     switch_channel_t *channel = switch_core_session_get_channel(session);
     switch_media_bug_t *bug = (switch_media_bug_t*) switch_channel_get_private(channel, bugname);
     if (!bug) {
-      switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "audio_cast_session_sendtext failed because no bug\n");
+      switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "audio_cast_session_send failed because no bug\n");
       return SWITCH_STATUS_FALSE;
     }
 
-	if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, text, "http://localhost:3030/start_cast")) {
-		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error Sending text to mcs.\n");
+	if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/start_cast")) {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error Sending event to mcs.\n");
 		return SWITCH_STATUS_FALSE;
 	}
 
 	return status;
 }
 
-#define CAST_API_SYNTAX "<uuid> [start | stop | pause | resume | mask | unmask | sendtext]"
+#define CAST_API_SYNTAX "<uuid> [start | stop | pause | resume | mask | unmask | send]"
 SWITCH_STANDARD_API(cast_function)
 {
 	char *mycmd = NULL, *argv[3] = { 0 };
@@ -226,8 +226,8 @@ SWITCH_STANDARD_API(cast_function)
 				flags |= SMBF_STEREO;
 				status = start_capture(lsession, flags, sampling, bugname, argv[2]);
 			}
-			else if (!strcasecmp(argv[1], "sendtext")) {
-				status = do_sendtext(lsession, bugname, argv[2]);
+			else if (!strcasecmp(argv[1], "send")) {
+				status = payload(lsession, bugname, argv[2]);
 			}
 			else {
 				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "unsupported mod_audio_cast cmd: %s %s\n", argv[1], argv[2]);
