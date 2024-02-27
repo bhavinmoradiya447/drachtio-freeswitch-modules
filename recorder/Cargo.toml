@@ -1,0 +1,24 @@
+[package]
+name = "recorder"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-stream = "0.3.5"
+# blockingqueue = "0.1.1"
+futures-util = { version = "0.3.29", features = ["sink"] }
+http = "1.0.0"
+# openssl = "0.10.61"
+prost = "0.12.3"
+# sha1_smol = "1.0.0"
+tokio = { version = "1.35.0", features = ["net", "full", "macros", "rt-multi-thread"] }
+# tokio-native-tls = "0.3.1"
+# tokio-websockets = { version = "0.5.0", features = ["server", "native-tls", "openssl"] }
+tonic = "0.10.2"
+warp = "0.3.6"
+uuid = "0.8"
+
+[build-dependencies]
+tonic-build = "0.10.2"

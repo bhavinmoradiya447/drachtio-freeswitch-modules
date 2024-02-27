@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package mcs;
+
+service MultiCastService {
+    rpc listen (stream Payload) returns (ListenerResponse);
+}
+
+message  Payload {
+    string uuid = 1; // call leg id
+    uint32 seq = 2; // sequence number
+    uint64 timestamp = 3; // time stamp when audio was captured
+    uint32 size = 4; // size of audio
+    bytes audio = 5; // audio bytes
+}
+
+message ListenerResponse {
+    bool ok = 1;
+}
