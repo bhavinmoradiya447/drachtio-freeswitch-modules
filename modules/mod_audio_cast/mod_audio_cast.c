@@ -227,7 +227,7 @@ SWITCH_STANDARD_API(cast_function)
 				status = start_capture(lsession, flags, sampling, bugname, argv[2]);
 			}
 			else if (!strcasecmp(argv[1], "send")) {
-				status = payload(lsession, bugname, argv[2]);
+				status = do_send(lsession, bugname, argv[2]);
 			}
 			else {
 				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "unsupported mod_audio_cast cmd: %s %s\n", argv[1], argv[2]);
