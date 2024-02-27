@@ -83,7 +83,7 @@ extern "C" {
     return size * nitems;
   }
 
-  switch_status_t audio_cast_call_mcs(switch_core_session_t *session, char* hostName) {
+  switch_status_t audio_cast_call_mcs(switch_core_session_t *session, char* payload) {
     char* uuid = switch_core_session_get_uuid(session);
     char *curl_json_text = NULL;
     long httpRes;
@@ -99,7 +99,7 @@ extern "C" {
 		headers = switch_curl_slist_append(headers, "Content-Type: application/json");
 	
 
-		curl_json_text = switch_mprintf("{\"uuid\": \"%s\", \"address\": \"%s\"}", uuid, hostName);
+		curl_json_text = switch_mprintf("%s", payload);
 		switch_assert(curl_json_text != NULL);
 
 		

@@ -88,7 +88,7 @@ static switch_status_t start_capture(switch_core_session_t *session,
         switch_media_bug_flag_t flags, 
         int sampling,
         char* bugname,
-		char* hostName)
+		char* payload)
 {
 	switch_channel_t *channel = switch_core_session_get_channel(session);
 	switch_media_bug_t *bug;
@@ -104,7 +104,7 @@ static switch_status_t start_capture(switch_core_session_t *session,
 	if (switch_channel_get_private(channel, bugname)) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "mod_audio_cast: bug %s already attached!\n", bugname);
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "calling audio_cast_call_mcs.\n");
-		if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, hostName)) {
+		if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload)) {
 			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error calling audio_cast_call_mcs.\n");
 			return SWITCH_STATUS_FALSE;
 		}
@@ -126,7 +126,7 @@ static switch_status_t start_capture(switch_core_session_t *session,
 	}
 
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "calling audio_cast_call_mcs.\n");
-	if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, hostName)) {
+	if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload)) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error calling audio_cast_call_mcs.\n");
 		return SWITCH_STATUS_FALSE;
 	}
