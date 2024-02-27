@@ -75,12 +75,26 @@ static switch_status_t do_maskunmask(switch_core_session_t *session, char* bugna
 	return status;
 }
 
-static switch_status_t do_stop(switch_core_session_t *session, char* bugname)
+static switch_status_t do_stop(switch_core_session_t *session, char* bugname, char* payload)
 {
 	switch_status_t status = SWITCH_STATUS_SUCCESS;
-	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "mod_audio_cast (%s): stop\n", bugname);
-	status = audio_cast_session_cleanup(session, bugname, 0);
-
+	switch_channel_t *channel = switch_core_session_get_channel(session);
+    switch_media_bug_t *bug = (switch_media_bug_t*) switch_channel_get_private(channel, bugname);
+    switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "mod_audio_cast (%s): stop\n", bugname);
+	if (!bug) {
+      switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "audio_cast_session_cleanup: no bug %s - websocket conection already closed\n", bugname);
+      return SWITCH_STATUS_FALSE;
+    }
+	{
+		private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
+		tech_pvt->client_count--;
+		if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/stop_cast")) {
+			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error sending stop to mcs.\n");
+		}
+		if(tech_pvt->client_count==0){
+			status = audio_cast_session_cleanup(session, bugname, 0);
+		}
+	}
 	return status;
 }
 
@@ -101,12 +115,16 @@ static switch_status_t start_capture(switch_core_session_t *session,
     "mod_audio_stream (%s): streaming %d sampling.\n", 
     bugname, sampling);
 
-	if (switch_channel_get_private(channel, bugname)) {
+	if ((bug = (switch_media_bug_t*)switch_channel_get_private(channel, bugname))) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "mod_audio_cast: bug %s already attached!\n", bugname);
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "calling audio_cast_call_mcs.\n");
-		if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload)) {
-			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error calling audio_cast_call_mcs.\n");
+		if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/start_cast")) {
+			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error sending start to mcs.\n");
 			return SWITCH_STATUS_FALSE;
+		}
+		{
+			private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
+			tech_pvt->client_count++;
 		}
 		return SWITCH_STATUS_SUCCESS;
 	}
@@ -126,8 +144,8 @@ static switch_status_t start_capture(switch_core_session_t *session,
 	}
 
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "calling audio_cast_call_mcs.\n");
-	if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload)) {
-		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error calling audio_cast_call_mcs.\n");
+	if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/start_cast")) {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error sending start to mcs.\n");
 		return SWITCH_STATUS_FALSE;
 	}
 	
@@ -147,8 +165,17 @@ static switch_status_t do_sendtext(switch_core_session_t *session, char* bugname
 {
 	switch_status_t status = SWITCH_STATUS_SUCCESS;
 
-	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "mod_audio_stream (%s): sendtext %s\n", bugname, text);
-	status = audio_cast_session_sendtext(session, bugname, text);
+    switch_channel_t *channel = switch_core_session_get_channel(session);
+    switch_media_bug_t *bug = (switch_media_bug_t*) switch_channel_get_private(channel, bugname);
+    if (!bug) {
+      switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "audio_cast_session_sendtext failed because no bug\n");
+      return SWITCH_STATUS_FALSE;
+    }
+
+	if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, text, "http://localhost:3030/start_cast")) {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error Sending text to mcs.\n");
+		return SWITCH_STATUS_FALSE;
+	}
 
 	return status;
 }
@@ -178,7 +205,7 @@ SWITCH_STANDARD_API(cast_function)
 
 		if ((lsession = switch_core_session_locate(argv[0]))) {
 			if (!strcasecmp(argv[1], "stop")) {
-        		status = do_stop(lsession, bugname);
+        		status = do_stop(lsession, bugname, argv[2] );
       		}
 			else if (!strcasecmp(argv[1], "pause")) {
 				status = do_pauseresume(lsession, bugname, 1);

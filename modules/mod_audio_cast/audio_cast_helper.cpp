@@ -36,8 +36,9 @@ namespace {
 	  tech_pvt->disp = static_cast<void *>(disp);
 	  tech_pvt->audio_masked = 0;
 	  tech_pvt->graceful_shutdown = 0;
+    tech_pvt->client_count = 1;
     strncpy(tech_pvt->bugname, bugname, MAX_BUG_LEN);
-    strncpy(tech_pvt->mcsurl, "http://localhost:3030", MAX_URL_LEN);
+    
 
    switch_mutex_init(&tech_pvt->mutex, SWITCH_MUTEX_NESTED, switch_core_session_get_pool(session));
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "(%u) audio_cast_data_init\n", tech_pvt->id);
@@ -83,7 +84,7 @@ extern "C" {
     return size * nitems;
   }
 
-  switch_status_t audio_cast_call_mcs(switch_core_session_t *session, char* payload) {
+  switch_status_t audio_cast_call_mcs(switch_core_session_t *session, char* payload, char* url) {
     char* uuid = switch_core_session_get_uuid(session);
     char *curl_json_text = NULL;
     long httpRes;
@@ -123,7 +124,7 @@ extern "C" {
 				switch_yield(200000);
 			}
 
-			destUrl = switch_mprintf("%s","http://localhost:3030/start_cast");
+			destUrl = switch_mprintf("%s", url);
 			switch_curl_easy_setopt(curl_handle, CURLOPT_URL, destUrl);
 
 			switch_curl_easy_perform(curl_handle);
@@ -133,9 +134,9 @@ extern "C" {
 				goto end;
 			} else {
 				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Got error [%ld] posting to web server [%s]\n",
-								  httpRes, "http://localhost:3030/start_cast");
+								  httpRes, url);
 				
-				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Retry will be with url [%s]\n", "http://localhost:3030/start_cast");
+				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Retry will be with url [%s]\n", url);
 				
 			}
 		}
@@ -281,65 +282,6 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
     tech_pvt->graceful_shutdown = 1;
 
     return SWITCH_STATUS_SUCCESS;
-  }
-
-  switch_status_t do_http_2_mcs(const char* url, const char * contentType, const char * data) {
-    switch_CURL *curl_handle = NULL;
-    switch_curl_slist_t *headers = NULL;
-    curl_handle = switch_curl_easy_init();
-    char *ct = switch_mprintf("Content-Type: %s", contentType);
-    headers = switch_curl_slist_append(headers, ct);
-    switch_safe_free(ct);
-    switch_curl_easy_setopt(curl_handle, CURLOPT_URL, url);
-    switch_curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDSIZE, strlen(data));
-    switch_curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, (void *) data);
-    switch_curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "freeswitch-json/1.0");
-    if (headers) {
-        switch_curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers);
-    }
-
-    switch_curl_easy_perform(curl_handle);
-    long httpRes = 0;
-    switch_curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &httpRes);
-    switch_curl_easy_cleanup(curl_handle);
-    switch_curl_slist_free_all(headers);
-    if (httpRes == 200) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "do_http_2_mcs (%s) SUCCESS\n", data);
-        return SWITCH_STATUS_SUCCESS;
-    } else {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "do_http_2_mcs (%s) FAIL\n", data);
-        return SWITCH_STATUS_FALSE;
-    }
-  }
-
-  switch_status_t send_dtmf(char * url, char *text) {
-    if (!text) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "senddtmf NULL\n");
-        return SWITCH_STATUS_FALSE;
-    }
-    if (std::string("0123456789*#").find(*text) == std::string::npos) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "senddtmf (%s) INVALID\n", text);
-        return SWITCH_STATUS_FALSE;
-    }
-    const char * contentType = "application/json";
-    char *data = switch_mprintf("{\"dtmf\": \"%s\"}", text);
-    switch_status_t status =  do_http_2_mcs(url, contentType, (const char *)data);
-    switch_safe_free(data);
-    return status;
-  }
-
-  switch_status_t audio_cast_session_sendtext(switch_core_session_t *session, char *bugname, char *text) {
-    switch_channel_t *channel = switch_core_session_get_channel(session);
-    switch_media_bug_t *bug = (switch_media_bug_t*) switch_channel_get_private(channel, bugname);
-    if (!bug) {
-      switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "audio_cast_session_sendtext failed because no bug\n");
-      return SWITCH_STATUS_FALSE;
-    }
-    private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
-
-    if (!tech_pvt) return SWITCH_STATUS_FALSE;
-
-    return send_dtmf(tech_pvt->mcsurl, text);
   }
 
   switch_bool_t convert_linear2_g711_pcmu8k(char* frame, uint32_t* framelen) {
