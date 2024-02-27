@@ -2,7 +2,7 @@
 #define __MOD_CAST_H__
 
 #include <switch.h>
-#include <speex/speex_resampler.h>
+#include <switch_resample.h>
 
 #define MAX_BUG_LEN (64)
 #define MAX_SESSION_ID (256)
@@ -14,7 +14,7 @@ struct private_data {
 	char sessionId[MAX_SESSION_ID];
   char bugname[MAX_BUG_LEN+1];
   char mcsurl[MAX_URL_LEN+1];
-  SpeexResamplerState *resampler;
+  switch_audio_resampler_t *read_resampler;
   void * disp;
   int sampling;
   int  channels;

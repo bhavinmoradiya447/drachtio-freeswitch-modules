@@ -40,19 +40,6 @@ namespace {
     strncpy(tech_pvt->mcsurl, "http://localhost:3030", MAX_URL_LEN);
 
    switch_mutex_init(&tech_pvt->mutex, SWITCH_MUTEX_NESTED, switch_core_session_get_pool(session));
-
-    if (desiredSampling != sampling) {
-      switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "(%u) resampling from %u to %u\n", tech_pvt->id, sampling, desiredSampling);
-      tech_pvt->resampler = speex_resampler_init(channels, sampling, desiredSampling, SWITCH_RESAMPLE_QUALITY, &err);
-      if (0 != err) {
-        switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error initializing resampler: %s.\n", speex_resampler_strerror(err));
-        return SWITCH_STATUS_FALSE;
-      }
-    }
-    else {
-      switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "(%u) no resampling needed for this call\n", tech_pvt->id);
-    }
-
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "(%u) audio_cast_data_init\n", tech_pvt->id);
 
     return SWITCH_STATUS_SUCCESS;
@@ -60,9 +47,9 @@ namespace {
 
   void destroy_tech_pvt(private_t* tech_pvt) {
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "%s (%u) destroy_tech_pvt\n", tech_pvt->sessionId, tech_pvt->id);
-    if (tech_pvt->resampler) {
-      speex_resampler_destroy(tech_pvt->resampler);
-      tech_pvt->resampler = nullptr;
+    if (tech_pvt->read_resampler) {
+      switch_resample_destroy(&tech_pvt->read_resampler);
+      tech_pvt->read_resampler = nullptr;
     }
     if (tech_pvt->mutex) {
       switch_mutex_destroy(tech_pvt->mutex);
@@ -387,6 +374,23 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
         
         while (switch_core_media_bug_read(bug, &frame, SWITCH_TRUE) == SWITCH_STATUS_SUCCESS) {
 //           write(fd, frame.data , frame.datalen);
+          if( tech_pvt->audio_masked ) { 
+         	  unsigned char null_data[SWITCH_RECOMMENDED_BUFFER_SIZE] = {0};
+            memcpy(frame.data, null_data, frame.datalen);
+          }
+
+          // Resample to 8000
+          if(tech_pvt->read_resampler) {
+            switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Resampaling\n");
+
+            int16_t *org_data = (int16_t *) frame.data;
+            switch_resample_process(tech_pvt->read_resampler, org_data, (int) frame.datalen / 2);
+            uint32_t new_len = tech_pvt->read_resampler->to_len * 2;
+            memcpy(frame.data, tech_pvt->read_resampler->to, new_len);
+            frame.datalen = new_len;
+          }
+
+
           convert_linear2_g711_pcmu8k((char *)frame.data, &frame.datalen);
           payload * p = new payload;
           uuid_parse(tech_pvt->sessionId, p->id);

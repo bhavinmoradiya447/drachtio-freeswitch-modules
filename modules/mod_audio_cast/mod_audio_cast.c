@@ -17,8 +17,20 @@ static switch_bool_t capture_callback(switch_media_bug_t *bug, void *user_data, 
 	switch (type) {
 	case SWITCH_ABC_TYPE_INIT:
 	{
+		switch_codec_implementation_t read_impl;
 		private_t* tech_pvt = (private_t *)  switch_core_media_bug_get_user_data(bug);
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Got SWITCH_ABC_TYPE_INITl̥ for %s\n", tech_pvt->sessionId);
+		switch_core_session_get_read_impl(session, &read_impl);
+
+		if (read_impl.actual_samples_per_second != 8000) {
+			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Resampling from %d to %d for call-id %s\n", read_impl.actual_samples_per_second, 8000, tech_pvt->sessionId);
+
+			switch_resample_create(&tech_pvt->read_resampler,
+									read_impl.actual_samples_per_second,
+									8000,
+									320, SWITCH_RESAMPLE_QUALITY, 1);
+		}
+
 	}
 	break;
 	case SWITCH_ABC_TYPE_CLOSE:
@@ -26,6 +38,7 @@ static switch_bool_t capture_callback(switch_media_bug_t *bug, void *user_data, 
         private_t* tech_pvt = (private_t *)  switch_core_media_bug_get_user_data(bug);
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Got SWITCH_ABC_TYPE_CLOSE for %s\n", tech_pvt->sessionId);
         // send final packet and close
+		audio_cast_frame(session, bug);
 		audio_cast_session_cleanup(session, tech_pvt->bugname, 1);
 	}
 	break;
