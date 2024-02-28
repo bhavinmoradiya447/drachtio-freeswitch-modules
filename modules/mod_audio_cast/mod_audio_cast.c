@@ -90,7 +90,8 @@ static switch_status_t do_stop(switch_core_session_t *session, char* bugname, ch
 	{
 		private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
 
-		if (switch_core_hash_delete(tech_pvt->client_address_hash, address) != NULL && SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/stop_cast")) {
+		if (switch_core_hash_delete(tech_pvt->client_address_hash, address) != NULL 
+		&& SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/stop_cast")) {
 			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error sending stop to mcs.\n");
 		}
 		
@@ -180,7 +181,7 @@ static switch_status_t do_send(switch_core_session_t *session, char* bugname, ch
       return SWITCH_STATUS_FALSE;
     }
 
-	if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/start_cast")) {
+	if (SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/dispatch_event")) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error Sending event to mcs.\n");
 		return SWITCH_STATUS_FALSE;
 	}
