@@ -9,14 +9,20 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast::Sender;
 use tracing::info;
-use tracing_subscriber;
 
 use crate::http_server::start_http_server;
+use crate::mcs::Payload;
 use crate::udp_server::start_udp_server;
+
+#[derive(Debug, Default, Clone)]
+struct AddressPayload {
+    address: String,
+    payload: Payload,
+}
 
 #[derive(Debug, Default)]
 struct UuidChannels {
-    uuid_sender_map: HashMap<String, Sender<Vec<u8>>>,
+    uuid_sender_map: HashMap<String, Sender<AddressPayload>>,
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]

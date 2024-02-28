@@ -12,6 +12,7 @@ pub mod mcs {
 use crate::mcs::multi_cast_service_server::MultiCastServiceServer;
 use crate::mcs::multi_cast_service_server::MultiCastService;
 use crate::mcs::Payload;
+use crate::mcs::PayloadType;
 use crate::mcs::ListenerResponse;
 
 pub struct MultiCastServiceImpl {}
@@ -26,27 +27,47 @@ impl MultiCastService for MultiCastServiceImpl {
 
         // create a map of uuid to file
         let mut files = HashMap::new();
+        let mut left_files = HashMap::new();
+        let mut right_files = HashMap::new();
 
         tokio::spawn(async move {
             while let Some(payload) = stream.message().await.unwrap() {
+                // println!("[debug] seq: {}, size: {}", payload.seq, payload.size);
                 // if uuid does not exist in map create file
+                if payload.event_data.len() > 0 {
+                    println!("[info] got event data: {}", payload.event_data);
+                }
                 if !files.contains_key(&payload.uuid) {
                     // create file
                     println!("[info] opening file: /tmp/rec-{}.raw", payload.uuid);
                     let mut file = File::create(format!("/tmp/rec-{}.raw", payload.uuid)).unwrap();
+                    let mut left_file = File::create(format!("/tmp/rec-{}-left.raw", payload.uuid)).unwrap();
+                    let mut right_file = File::create(format!("/tmp/rec-{}-right.raw", payload.uuid)).unwrap();
                     file.write_all(payload.audio.as_slice()).unwrap();
-                    files.insert(payload.uuid, file);
+                    left_file.write_all(&payload.audio_left).unwrap();
+                    right_file.write_all(&payload.audio_right).unwrap();
+                    files.insert(payload.uuid.clone(), file);
+                    left_files.insert(payload.uuid.clone(), left_file);
+                    right_files.insert(payload.uuid, right_file);
                 } else {
-                    if payload.size==0 {
+                    if payload.payload_type == <PayloadType as Into<i32>>::into(PayloadType::AudioStop) {
                         // close file
-                        println!("[info] empty seq: {}, closing file: /tmp/rec-{}.raw",payload.seq, payload.uuid);
+                        println!("[info] closing file: /tmp/rec-{}.raw", payload.uuid);
                         let mut file = files.remove(&payload.uuid).unwrap();
                         file.flush().unwrap();
+                        let mut left_file = left_files.remove(&payload.uuid).unwrap();
+                        left_file.flush().unwrap();
+                        let mut right_file = right_files.remove(&payload.uuid).unwrap();
+                        right_file.flush().unwrap();
                     } else {
                         // append audio to file
                         // println!("[trace] writing seq: {}, size: {} to file: /tmp/rec-{}.raw", payload.seq, payload.audio.len(), payload.uuid);
                         let mut file = files.get(&payload.uuid).unwrap();
                         file.write_all(payload.audio.as_slice()).unwrap();
+                        let mut left_file = left_files.get(&payload.uuid).unwrap();
+                        left_file.write_all(&payload.audio_left).unwrap();
+                        let mut right_file = right_files.get(&payload.uuid).unwrap();
+                        right_file.write_all(&payload.audio_right).unwrap();
                     }
                 }
 

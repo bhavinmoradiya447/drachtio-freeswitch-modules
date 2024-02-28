@@ -1,0 +1,15 @@
+[Unit]
+Description= RTMS Media Streamer
+After=network.target
+[Service]
+Type=simple
+Restart=always
+ExecStart=/usr/local/mcs/mcs
+CPUQuota=100%
+WorkingDirectory=/usr/local/mcs
+StandardOutput=append:/usr/local/mcs/log/mcs.log
+StandardError=append:/usr/local/mcs/log/mcs.log
+User=freeswitch
+Group=freeswitch
+[Install]
+WantedBy=multi-user.target

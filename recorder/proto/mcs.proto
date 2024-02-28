@@ -6,12 +6,22 @@ service MultiCastService {
     rpc listen (stream Payload) returns (ListenerResponse);
 }
 
+enum PayloadType {
+    AUDIO_COMBINED = 0;
+    AUDIO_SPLIT = 1;
+    AUDIO_START = 2;
+    AUDIO_STOP = 3;
+    EVENT_DATA = 4;
+}
+
 message  Payload {
     string uuid = 1; // call leg id
-    uint32 seq = 2; // sequence number
+    PayloadType payload_type = 2;
     uint64 timestamp = 3; // time stamp when audio was captured
-    uint32 size = 4; // size of audio
-    bytes audio = 5; // audio bytes
+    bytes audio = 4; // audio bytes, in combined stereo format
+    bytes audio_left = 5; // audio bytes, left channel
+    bytes audio_right = 6; // audio bytes, right channel
+    string event_data = 7; // event metadata in json form
 }
 
 message ListenerResponse {
