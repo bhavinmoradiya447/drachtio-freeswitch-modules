@@ -12,6 +12,21 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_audio_cast_load);
  */
 SWITCH_MODULE_DEFINITION(mod_audio_cast, mod_audio_cast_load, mod_audio_cast_shutdown, NULL);
 
+static void responseHandler(switch_core_session_t* session, const char* eventName, int last_seq, const char* address, char* payload) {
+	switch_event_t *event;
+    int duration_ms = 320 * (last_seq -1 ) / 2 / 8; // per packet data byte * number of packets / 2 channel / 8k bit rate
+
+	switch_channel_t *channel = switch_core_session_get_channel(session);
+	if (payload) switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "responseHandler: sending event payload: %s.\n", payload);
+	switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, eventName);
+	switch_channel_event_set_data(channel, event);
+    if (address) switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Client-Address", address);
+    switch_event_add_header(event, SWITCH_STACK_BOTTOM, "duration_ms", "%d", duration_ms);
+    if (payload) switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Payload", payload);
+
+	switch_event_fire(&event);
+}
+
 static switch_bool_t capture_callback(switch_media_bug_t *bug, void *user_data, switch_abc_type_t type)
 {
     switch_core_session_t *session = switch_core_media_bug_get_session(bug);
@@ -94,7 +109,7 @@ static switch_status_t do_stop(switch_core_session_t *session, char* bugname, ch
         && SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/stop_cast")) {
             switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error sending stop to mcs.\n");
         }
-        
+        tech_pvt->responseHandler(session, EVENT_CAST_STOP, tech_pvt->seq, address, payload);
         if(switch_hashtable_count(tech_pvt->client_address_hash) == 0){
             status = audio_cast_session_cleanup(session, bugname, 0);
         }
@@ -131,7 +146,7 @@ static switch_status_t start_capture(switch_core_session_t *session,
             switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error sending start to mcs.\n");
             return SWITCH_STATUS_FALSE;
         }
-        
+        tech_pvt->responseHandler(session, EVENT_CAST_START, tech_pvt->seq, address, payload);
         return SWITCH_STATUS_SUCCESS;
     }
 
@@ -143,7 +158,7 @@ static switch_status_t start_capture(switch_core_session_t *session,
     }
 
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "calling audio_cast_session_init.\n");
-    if (SWITCH_STATUS_FALSE == audio_cast_session_init(session, read_codec->implementation->actual_samples_per_second, 
+    if (SWITCH_STATUS_FALSE == audio_cast_session_init(session, responseHandler, read_codec->implementation->actual_samples_per_second, 
         sampling, channels, bugname, &pUserData)) {
         switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error initializing mod_audio_cast session.\n");
         return SWITCH_STATUS_FALSE;
@@ -164,6 +179,7 @@ static switch_status_t start_capture(switch_core_session_t *session,
     {
         private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
         switch_core_hash_insert(tech_pvt->client_address_hash, address, address);
+        tech_pvt->responseHandler(session, EVENT_CAST_START, tech_pvt->seq, address, payload);
     }
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "exiting start_capture.\n");
     return SWITCH_STATUS_SUCCESS;
@@ -270,6 +286,18 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_audio_cast_load)
     /* connect my internal structure to the blank pointer passed to me */
     *module_interface = switch_loadable_module_create_module_interface(pool, modname);
 
+	/* create/register custom event message types */
+	if (switch_event_reserve_subclass(EVENT_CAST_START) != SWITCH_STATUS_SUCCESS ||
+    switch_event_reserve_subclass(EVENT_CAST_STOP) != SWITCH_STATUS_SUCCESS ||
+    switch_event_reserve_subclass(EVENT_CAST_PAUSE) != SWITCH_STATUS_SUCCESS ||
+    switch_event_reserve_subclass(EVENT_CAST_RESUME) != SWITCH_STATUS_SUCCESS ||
+    switch_event_reserve_subclass(EVENT_CAST_MASK) != SWITCH_STATUS_SUCCESS ||
+    switch_event_reserve_subclass(EVENT_CAST_UNMASK) != SWITCH_STATUS_SUCCESS ||
+    switch_event_reserve_subclass(EVENT_CAST_CLOSE) != SWITCH_STATUS_SUCCESS) {
+
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't register an event subclass for mod_audio_cast API.\n");
+		return SWITCH_STATUS_TERM;
+	}
 
     SWITCH_ADD_API(api_interface, "uuid_audio_cast", "audio_cast API", cast_function, CAST_API_SYNTAX);
     switch_console_set_complete("add uuid_audio_cast start");
@@ -278,7 +306,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_audio_cast_load)
     switch_console_set_complete("add uuid_audio_cast resume");
     switch_console_set_complete("add uuid_audio_cast mask");
     switch_console_set_complete("add uuid_audio_cast unmask");
-    switch_console_set_complete("add uuid_audio_cast sendtext");
+    switch_console_set_complete("add uuid_audio_cast send");
     
     audio_cast_init();
 
@@ -296,5 +324,14 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_audio_cast_load)
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_audio_cast_shutdown)
 {
     audio_cast_cleanup();
+
+    switch_event_free_subclass(EVENT_CAST_START);
+	switch_event_free_subclass(EVENT_CAST_STOP);
+	switch_event_free_subclass(EVENT_CAST_PAUSE);
+	switch_event_free_subclass(EVENT_CAST_RESUME);
+	switch_event_free_subclass(EVENT_CAST_MASK);
+	switch_event_free_subclass(EVENT_CAST_UNMASK);
+	switch_event_free_subclass(EVENT_CAST_CLOSE);
+
     return SWITCH_STATUS_SUCCESS;
 }

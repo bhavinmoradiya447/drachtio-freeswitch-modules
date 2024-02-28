@@ -10,7 +10,7 @@
 namespace {
   static unsigned int idxCallCount = 0;
   
-  switch_status_t audio_cast_data_init(private_t *tech_pvt, switch_core_session_t *session, int sampling, int desiredSampling, int channels, 
+  switch_status_t audio_cast_data_init(private_t *tech_pvt, switch_core_session_t *session, responseHandler_t responseHandler, int sampling, int desiredSampling, int channels, 
     char *bugname) {
 
     int err;
@@ -36,6 +36,7 @@ namespace {
     tech_pvt->disp = static_cast<void *>(disp);
     tech_pvt->audio_masked = 0;
     tech_pvt->graceful_shutdown = 0;
+    tech_pvt->responseHandler = responseHandler;
     switch_core_hash_init_case(&tech_pvt->client_address_hash, SWITCH_FALSE);
     strncpy(tech_pvt->bugname, bugname, MAX_BUG_LEN);
     
@@ -170,6 +171,7 @@ extern "C" {
   }
 
   switch_status_t audio_cast_session_init(switch_core_session_t *session, 
+              responseHandler_t responseHandler,
               uint32_t samples_per_second, 
               int sampling,
               int channels,
@@ -184,7 +186,7 @@ extern "C" {
       switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "error allocating memory!\n");
       return SWITCH_STATUS_FALSE;
     }
-    if (SWITCH_STATUS_SUCCESS != audio_cast_data_init(tech_pvt, session, samples_per_second, sampling, channels, 
+    if (SWITCH_STATUS_SUCCESS != audio_cast_data_init(tech_pvt, session, responseHandler, samples_per_second, sampling, channels, 
       bugname)) {
       destroy_tech_pvt(tech_pvt);
       return SWITCH_STATUS_FALSE;
@@ -232,7 +234,7 @@ switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char 
         delete p; 
       }
     }
-
+    tech_pvt->responseHandler(session, EVENT_CAST_CLOSE, tech_pvt->seq, NULL, NULL);
     destroy_tech_pvt(tech_pvt);
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "(%u) audio_cast_session_cleanup: connection closed\n", id);
     return SWITCH_STATUS_SUCCESS;
@@ -251,6 +253,11 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
 
     switch_core_media_bug_flush(bug);
     tech_pvt->audio_masked = mask;
+    if(mask) {
+        tech_pvt->responseHandler(session, EVENT_CAST_MASK, tech_pvt->seq, NULL, NULL);
+    } else {
+      tech_pvt->responseHandler(session, EVENT_CAST_UNMASK, tech_pvt->seq, NULL, NULL);
+    }
     return SWITCH_STATUS_SUCCESS;
 }
 
@@ -267,6 +274,11 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
 
     switch_core_media_bug_flush(bug);
     tech_pvt->audio_paused = pause;
+    if(pause) {
+        tech_pvt->responseHandler(session, EVENT_CAST_PAUSE, tech_pvt->seq, NULL, NULL);
+    } else {
+      tech_pvt->responseHandler(session, EVENT_CAST_RESUME, tech_pvt->seq, NULL, NULL);
+    }
     return SWITCH_STATUS_SUCCESS;
   }
 

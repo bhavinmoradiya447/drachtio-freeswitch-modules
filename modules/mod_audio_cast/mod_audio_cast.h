@@ -8,12 +8,22 @@
 #define MAX_BUG_LEN (64)
 #define MAX_SESSION_ID (256)
 
+#define EVENT_CAST_START     "mod_audio_cast::start"
+#define EVENT_CAST_STOP      "mod_audio_cast::stop"
+#define EVENT_CAST_PAUSE     "mod_audio_cast::pause"
+#define EVENT_CAST_RESUME    "mod_audio_cast::resume"
+#define EVENT_CAST_MASK      "mod_audio_cast::mask"
+#define EVENT_CAST_UNMASK    "mod_audio_cast::unmask"
+#define EVENT_CAST_CLOSE     "mod_audio_cast::close"
+
+typedef void (*responseHandler_t)(switch_core_session_t* session, const char* eventName, int last_seq, const char* address, char* json);
 
 struct private_data {
   switch_mutex_t *mutex;
   char sessionId[MAX_SESSION_ID];
   char bugname[MAX_BUG_LEN+1];
   switch_audio_resampler_t *read_resampler;
+  responseHandler_t responseHandler;
   void * disp;
   int sampling;
   int  channels;
