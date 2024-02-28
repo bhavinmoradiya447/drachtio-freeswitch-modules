@@ -10,8 +10,8 @@
 
 
 struct private_data {
-	switch_mutex_t *mutex;
-	char sessionId[MAX_SESSION_ID];
+  switch_mutex_t *mutex;
+  char sessionId[MAX_SESSION_ID];
   char bugname[MAX_BUG_LEN+1];
   switch_audio_resampler_t *read_resampler;
   void * disp;

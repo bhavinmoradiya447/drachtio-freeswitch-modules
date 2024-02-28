@@ -1,7 +1,6 @@
 #ifndef DISPATCHER_H
 #define DISPATCHER_H
 
-#include <queue>
 #include <mutex>
 #include <condition_variable>
 #include <iostream>
@@ -44,17 +43,7 @@ class dispatcher {
         ~dispatcher();
         int connet_ds_socket();
         void dispatch(payload * p);
-        //void run();
         void stop();
-        /*static dispatcher * get_instance() {
-            static dispatcher * instance;
-            if (instance == NULL) {
-                instance = new dispatcher();
-                thread t(&dispatcher::run, instance);
-                t.detach();
-            }
-            return instance;
-        }*/
 };
 
 

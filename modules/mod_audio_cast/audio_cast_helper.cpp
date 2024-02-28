@@ -32,10 +32,10 @@ namespace {
     tech_pvt->channels = channels;
     tech_pvt->id = ++idxCallCount;
     tech_pvt->audio_paused = 0;
-	  tech_pvt->seq=1;
-	  tech_pvt->disp = static_cast<void *>(disp);
-	  tech_pvt->audio_masked = 0;
-	  tech_pvt->graceful_shutdown = 0;
+    tech_pvt->seq=1;
+    tech_pvt->disp = static_cast<void *>(disp);
+    tech_pvt->audio_masked = 0;
+    tech_pvt->graceful_shutdown = 0;
     switch_core_hash_init_case(&tech_pvt->client_address_hash, SWITCH_FALSE);
     strncpy(tech_pvt->bugname, bugname, MAX_BUG_LEN);
     
@@ -97,62 +97,62 @@ extern "C" {
     uint32_t cur_try;
 
 
-		char *destUrl = NULL;
-		curl_handle = switch_curl_easy_init();
-		headers = switch_curl_slist_append(headers, "Content-Type: application/json");
-	
+    char *destUrl = NULL;
+    curl_handle = switch_curl_easy_init();
+    headers = switch_curl_slist_append(headers, "Content-Type: application/json");
+  
 
-		curl_json_text = switch_mprintf("%s", payload);
-		switch_assert(curl_json_text != NULL);
+    curl_json_text = switch_mprintf("%s", payload);
+    switch_assert(curl_json_text != NULL);
 
-		
-		switch_curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers);
-		switch_curl_easy_setopt(curl_handle, CURLOPT_POST, 1);
-		switch_curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1);
-		switch_curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, curl_json_text);
-		switch_curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "freeswitch-json/1.0");
-		switch_curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, httpCallBack);
+    
+    switch_curl_easy_setopt(curl_handle, CURLOPT_HTTPHEADER, headers);
+    switch_curl_easy_setopt(curl_handle, CURLOPT_POST, 1);
+    switch_curl_easy_setopt(curl_handle, CURLOPT_NOSIGNAL, 1);
+    switch_curl_easy_setopt(curl_handle, CURLOPT_POSTFIELDS, curl_json_text);
+    switch_curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, "freeswitch-json/1.0");
+    switch_curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, httpCallBack);
 
 
-		// tcp timeout
-		switch_curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, 3);
+    // tcp timeout
+    switch_curl_easy_setopt(curl_handle, CURLOPT_TIMEOUT, 3);
 
-		/* these were used for testing, optionally they may be enabled if someone desires
-		   switch_curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1); // 302 recursion level
-		 */
+    /* these were used for testing, optionally they may be enabled if someone desires
+       switch_curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1); // 302 recursion level
+     */
 
-		for (cur_try = 0; cur_try < 3; cur_try++) {
-			if (cur_try > 0) {
-				switch_yield(200000);
-			}
+    for (cur_try = 0; cur_try < 3; cur_try++) {
+      if (cur_try > 0) {
+        switch_yield(200000);
+      }
 
-			destUrl = switch_mprintf("%s", url);
-			switch_curl_easy_setopt(curl_handle, CURLOPT_URL, destUrl);
+      destUrl = switch_mprintf("%s", url);
+      switch_curl_easy_setopt(curl_handle, CURLOPT_URL, destUrl);
 
-			switch_curl_easy_perform(curl_handle);
-			switch_curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &httpRes);
-			switch_safe_free(destUrl);
-			if (httpRes >= 200 && httpRes < 300) {
-				goto end;
-			} else {
-				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Got error [%ld] posting to web server [%s]\n",
-								  httpRes, url);
-				
-				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Retry will be with url [%s]\n", url);
-				
-			}
-		}
-		
-		switch_curl_easy_cleanup(curl_handle);
-		switch_curl_slist_free_all(headers);
-		switch_curl_slist_free_all(slist);
-		slist = NULL;
-		headers = NULL;
-		curl_handle = NULL;
+      switch_curl_easy_perform(curl_handle);
+      switch_curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE, &httpRes);
+      switch_safe_free(destUrl);
+      if (httpRes >= 200 && httpRes < 300) {
+        goto end;
+      } else {
+        switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Got error [%ld] posting to web server [%s]\n",
+                  httpRes, url);
+        
+        switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Retry will be with url [%s]\n", url);
+        
+      }
+    }
+    
+    switch_curl_easy_cleanup(curl_handle);
+    switch_curl_slist_free_all(headers);
+    switch_curl_slist_free_all(slist);
+    slist = NULL;
+    headers = NULL;
+    curl_handle = NULL;
 
-		/* if we are here the web post failed for some reason */
-		
-		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Unable to post to mcs server\n");
+    /* if we are here the web post failed for some reason */
+    
+    switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Unable to post to mcs server\n");
     return SWITCH_STATUS_FALSE;
 
     end:
@@ -307,7 +307,7 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
 
     if (!tech_pvt || tech_pvt->audio_paused || tech_pvt->graceful_shutdown) return SWITCH_TRUE;
     
-	// TODO:: Add logic for mask 
+  // TODO:: Add logic for mask 
     // TODO:: Add logic for resample 
     if (switch_mutex_trylock(tech_pvt->mutex) == SWITCH_STATUS_SUCCESS) {
         //private_t* tech_pvt = (private_t *)  switch_core_media_bug_get_user_data(bug);
@@ -319,7 +319,7 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
         while (switch_core_media_bug_read(bug, &frame, SWITCH_TRUE) == SWITCH_STATUS_SUCCESS) {
 //           write(fd, frame.data , frame.datalen);
           if( tech_pvt->audio_masked ) { 
-         	  unsigned char null_data[SWITCH_RECOMMENDED_BUFFER_SIZE] = {0};
+             unsigned char null_data[SWITCH_RECOMMENDED_BUFFER_SIZE] = {0};
             memcpy(frame.data, null_data, frame.datalen);
           }
 
@@ -346,7 +346,7 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
           disp->dispatch(p);
           delete p;
         }
-	  }
+    }
       
     switch_mutex_unlock(tech_pvt->mutex);
     
