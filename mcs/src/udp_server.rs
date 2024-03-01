@@ -1,9 +1,7 @@
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
-use tokio::{
-    net::UnixDatagram,
-};
+use tokio::net::UnixDatagram;
 use tracing::{error, info};
 
 use crate::mcs::PayloadType;
@@ -13,7 +11,7 @@ use crate::{AddressPayload, Payload};
 pub async fn start_udp_server(
     channels: Arc<Mutex<UuidChannels>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let socket_path = "/tmp/test-mcs-ds.sock"; // Replace with the actual path to your Unix domain socket
+    let socket_path = "/usr/local/mcs/mcs-ds.sock"; // Replace with the actual path to your Unix domain socket
                                                // delete the socket file if it already exists
     tokio::fs::remove_file(socket_path).await.ok();
     // bind to the socket log on error
@@ -73,5 +71,27 @@ fn parse_payload(buf: Vec<u8>) -> AddressPayload {
     AddressPayload {
         payload,
         ..Default::default()
+    }
+}
+
+// unit tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_payload() {
+        let mut buf = Vec::new();
+        let uuid = Uuid::new_v4();
+        buf.extend_from_slice(uuid.as_bytes());
+        let seq: u32 = 0;
+        buf.extend_from_slice(&seq.to_le_bytes());
+        let timestamp = chrono::Utc::now().timestamp_millis().to_le_bytes();
+        buf.extend_from_slice(&timestamp);
+        let len: u32 = 0;
+        buf.extend_from_slice(&len.to_le_bytes());
+        let payload = parse_payload(buf);
+        assert_eq!(payload.payload.uuid, uuid.to_string());
+        assert_eq!(payload.payload.audio.len(), 0);
     }
 }

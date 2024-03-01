@@ -15,7 +15,8 @@ tokio = { version = "1.35.0", features = ["macros", "rt", "rt-multi-thread"] }
 
 # for REST APIs
 warp = "0.3.6"
-uuid = "0.8"
+uuid = {version = "1.7.0", features = ["v4", "fast-rng"]}
+serde = {version = "1.0.197", features = ["derive"]}
 
 # for grpc
 prost = "0.12.3"
@@ -23,9 +24,18 @@ tonic = "0.10.2"
 
 # for tracing
 tracing = "0.1.40"
-tracing-subscriber = "0.3.18"
+tracing-subscriber = { version = "0.3.18", features = ["json"] }
 package = "0.0.0"
 chrono = "0.4.34"
+serde_json = "1.0.114"
+
+# for openapi doc
+utoipa = "4.2.0"
+utoipa-swagger-ui = "6.0.0"
+http = "1.0.0"
 
 [build-dependencies]
 tonic-build = "0.10.2"
+
+[dev-dependencies]
+restest = "0.1.0"

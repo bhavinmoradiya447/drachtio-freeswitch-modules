@@ -28,7 +28,7 @@ struct payload {
 class dispatcher {
     private:
         int fd;
-        const char * sock_path = "/tmp/test-mcs-ds.sock";
+        const char * sock_path = "/usr/local/mcs/mcs-ds.sock";
         struct sockaddr_un remote;
         int batch_size = 1;
         char *batch_buf = nullptr;
