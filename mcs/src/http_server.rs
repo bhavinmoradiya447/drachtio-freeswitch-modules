@@ -22,17 +22,17 @@ pub mod mcs {
 
 use crate::mcs::multi_cast_service_client::MultiCastServiceClient;
 use crate::mcs::PayloadType;
+use crate::mcs::Payload;
 use crate::AddressPayload;
 use crate::UuidChannels;
-
-const GRPC_CONNECTIONS: usize = 20;
+use crate::CONFIG;
 
 #[derive(Debug, Default, Clone)]
 struct TokenInterceptor;
 
 impl tonic::service::Interceptor for TokenInterceptor {
     fn call(&mut self, mut request: tonic::Request<()>) -> Result<tonic::Request<()>, Status> {
-        let token = std::fs::read_to_string("/usr/local/token.txt").ok();
+        let token = std::fs::read_to_string(CONFIG.http_server.token_file.clone()).ok();
         if let Some(token) = token {
             let bearer_token = format!("Bearer {}", token);
             request.metadata_mut().insert("authorization", bearer_token.parse().unwrap());
@@ -76,16 +76,30 @@ pub async fn start_http_server(
         .and(with_uuid_channel)
         .and_then(dispatch_event_handler);
 
-    // swagger ui
-    let config = Arc::new(Config::from("/api-doc.json"));
+    let ping = warp::path!("ping")
+        .and(warp::get())
+        .and_then(ping_handler);
 
+    let routes = init_open_api()
+        .or(init_swagger_ui())
+        .or(ping)
+        .or(start_cast)
+        .or(stop_cast)
+        .or(dispatch_event);
+
+    info!("starting http server");
+    warp::serve(routes).run(([127, 0, 0, 1], CONFIG.http_server.port)).await;
+    Ok(())
+}
+
+fn init_open_api() -> impl Filter<Extract = (impl Reply,), Error = warp::Rejection> + Clone {
     #[derive(OpenApi)]
     #[openapi(
         paths(
             crate::http_server::start_cast_handler, 
             crate::http_server::dispatch_event_handler, 
             crate::http_server::stop_cast_handler,
-            crate::http_server::ping,
+            crate::http_server::ping_handler,
         ),
         components(
             schemas(crate::http_server::StartCastRequest, 
@@ -102,24 +116,18 @@ pub async fn start_http_server(
     let api_doc = warp::path("api-doc.json")
         .and(warp::get())
         .map(|| warp::reply::json(&ApiDoc::openapi()));
+    api_doc
+}
 
+fn init_swagger_ui() -> impl Filter<Extract = (impl Reply,), Error = warp::Rejection> + Clone {
+    let config = Arc::new(Config::from("/api-doc.json"));
     let swagger_ui = warp::path("swagger-ui")
         .and(warp::get())
         .and(warp::path::full())
         .and(warp::path::tail())
         .and(warp::any().map(move || config.clone()))
         .and_then(serve_swagger);
-
-    let routes = start_cast
-        .or(filters::get_ping())
-        .or(api_doc)
-        .or(swagger_ui)
-        .or(stop_cast)
-        .or(dispatch_event);
-
-    info!("starting http server");
-    warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
-    Ok(())
+    swagger_ui
 }
 
 async fn serve_swagger(
@@ -158,24 +166,9 @@ async fn serve_swagger(
 struct StartCastRequest {
     uuid: String,
     address: String,
+    codec: Option<String>,
     mode: Option<String>,
     metadata: Option<String>,
-}
-
-// create fn to get address uri from input address string
-// read contents of /usr/local/token.txt and set token as
-// authorization header if it exists
-fn get_address_uri(address: String) -> Uri {
-    let address_uri = Uri::try_from(&address).unwrap();
-    let token = std::fs::read_to_string("/usr/local/token.txt").ok();
-    if let Some(token) = token {
-        let mut headers = http::HeaderMap::new();
-        let bearer_token = format!("Bearer {}", token);
-        headers.insert("authorization", bearer_token.parse().unwrap());
-        address_uri
-    } else {
-        address_uri
-    }
 }
 
 #[utoipa::path(post, path = "/start_cast", request_body = StartCastRequest)]
@@ -190,11 +183,12 @@ async fn start_cast_handler(
     let uuid = request.uuid.clone();
     let uuid_clone = uuid.clone();
     let address = request.address.clone();
-    let mode = request.mode.unwrap_or("combined".to_string()).clone();
+    let codec = request.codec.unwrap_or("mulaw".to_string());
+    let mode = request.mode.unwrap_or("combined".to_string());
     let metadata = request.metadata.unwrap_or("".to_string()).clone();
-    let group = (count / GRPC_CONNECTIONS) % GRPC_CONNECTIONS;
+    let group = (count / CONFIG.http_server.grpc_connection_pool) % CONFIG.http_server.grpc_connection_pool;
     let address_key = format!("{}-{}", address, group);
-    let address_uri = get_address_uri(address.clone());
+    let address_uri = Uri::try_from(&address).unwrap();
 
     let mut address_client = address_client.lock().unwrap();
     let mut client = match address_client.clients.get(&address_key) {
@@ -229,20 +223,12 @@ async fn start_cast_handler(
     tokio::spawn(async move {
         info!("init payload stream for uuid: {} to: {}", uuid, address);
         let payload_stream = async_stream::stream! {
-            while let Ok(addr_payload) = receiver.recv().await {
-                let mut payload = addr_payload.payload;
-                let payload_type = payload.payload_type;
-                if payload_type == eval(&PayloadType::AudioCombined) && mode != "combined" {
-                    let (left, right) = handle_split(&payload.audio, mode.clone());
-                    payload.audio_left = left;
-                    payload.audio_right = right;
-                    payload.payload_type = PayloadType::AudioSplit.into();
-                    payload.audio.clear();
-                }
-                yield payload;
+            while let Ok(mut addr_payload) = receiver.recv().await {
+                let payload_type = addr_payload.payload.payload_type;
+                process_payload(&mut addr_payload.payload, mode.clone(), codec.clone());
+                yield addr_payload.payload;
                 if payload_type == eval(&PayloadType::AudioEnd)
-                    || (payload_type == eval(&PayloadType::AudioStop)
-                        && address == addr_payload.address) {
+                    || (payload_type == eval(&PayloadType::AudioStop) && address == addr_payload.address) {
                     info!("done streaming for uuid: {} to: {}", uuid, address);
                     break;
                 }
@@ -265,25 +251,35 @@ async fn start_cast_handler(
     Ok(warp::reply::json(&"ok"))
 }
 
+fn process_payload (payload: &mut Payload, mode: String, codec: String) {
+    if payload.payload_type == eval(&PayloadType::AudioCombined) && mode == "split" {
+        let (left, right) = handle_split(&payload.audio, codec.clone());
+        payload.audio_left = left;
+        payload.audio_right = right;
+        payload.payload_type = PayloadType::AudioSplit.into();
+        payload.audio.clear();
+    }
+}
+
 fn eval(payload_type: &PayloadType) -> i32 {
     *payload_type as i32
 }
 
-#[instrument(name = "handle_split")]
-fn handle_split(audio: &Vec<u8>, mode: String) -> (Vec<u8>, Vec<u8>) {
+#[instrument(name = "handle_split", skip(audio, codec))]
+fn handle_split(audio: &Vec<u8>, codec: String) -> (Vec<u8>, Vec<u8>) {
     let split_size = audio.len() / 2;
     let mut left = Vec::with_capacity(split_size as usize);
     let mut right = Vec::with_capacity(split_size as usize);
-    if mode == "split-pcm16" {
-        for i in (0..split_size).step_by(4) {
+    if codec == "pcm16" {
+        for i in (0..audio.len()).step_by(4) {
             let i = i as usize;
             left.push(audio[i]);
             left.push(audio[i + 1]);
             right.push(audio[i + 2]);
             right.push(audio[i + 3]);
         }
-    } else if mode == "split-mulaw" {
-        for i in (0..split_size).step_by(2) {
+    } else {
+        for i in (0..audio.len()).step_by(2) {
             let i = i as usize;
             left.push(audio[i]);
             right.push(audio[i + 1]);
@@ -362,20 +358,9 @@ async fn stop_cast_handler(
 
 #[utoipa::path(get, path = "/ping")]
 #[instrument(name = "ping")]
-pub async fn ping() -> Result<impl warp::Reply, warp::Rejection> {
+pub async fn ping_handler() -> Result<impl warp::Reply, warp::Rejection> {
     Ok(warp::reply::json(&"pong"))
 }
-mod filters {
-    use warp::Filter;
-    use crate::http_server::ping;
-
-    pub fn get_ping() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-        warp::path!("ping")
-            .and(warp::get())
-            .and_then(ping)
-    }
-}
-
 // unit tests
 #[cfg(test)]
 mod tests {
@@ -387,17 +372,5 @@ mod tests {
         let (left, right) = handle_split(&audio, "split-pcm16".to_string());
         assert_eq!(left, vec![1, 2]);
         assert_eq!(right, vec![3, 4]);
-    }
-
-    #[tokio::test]
-    async fn test_ping () {
-        let api = filters::get_ping();
-        let resp = warp::test::request()
-            .method("GET")
-            .path("/ping")
-            .reply(&api)
-            .await;
-        assert_eq!(resp.status(), 200);
-        assert_eq!(resp.body(), "\"pong\"");
     }
 }

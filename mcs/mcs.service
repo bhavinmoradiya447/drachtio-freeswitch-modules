@@ -3,6 +3,7 @@ Description= RTMS Media Streamer
 After=network.target
 [Service]
 Type=simple
+Environment="RUN_ENV=Production"
 Restart=always
 ExecStart=/usr/local/mcs/mcs
 CPUQuota=100%

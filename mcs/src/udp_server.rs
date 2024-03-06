@@ -2,21 +2,24 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use tokio::net::UnixDatagram;
-use tracing::{error, info};
+use tracing::{error, info, trace};
 
 use crate::mcs::PayloadType;
-use crate::UuidChannels;
+use crate::{UuidChannels, CONFIG};
 use crate::{AddressPayload, Payload};
 
 pub async fn start_udp_server(
     channels: Arc<Mutex<UuidChannels>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let socket_path = "/usr/local/mcs/mcs-ds.sock"; // Replace with the actual path to your Unix domain socket
-                                               // delete the socket file if it already exists
-    tokio::fs::remove_file(socket_path).await.ok();
+    // get socket path from the config
+    let socket_path = CONFIG.udp_server.socket_file.clone();
+    // delete the socket file if it already exists
+    tokio::fs::remove_file(socket_path.clone()).await.ok();
+    info!("binding to socket: {}", socket_path);
     // bind to the socket log on error
     let socket = UnixDatagram::bind(socket_path)?;
     tokio::spawn(async move {
+        info!("started udp server");
         loop {
             let mut buffer = [0; 6432];
             let (size, _addr) = match socket.recv_from(&mut buffer).await {
@@ -26,6 +29,7 @@ pub async fn start_udp_server(
                     continue;
                 }
             };
+            trace!("received {} bytes", size);
             // extract the uuid from first 16 bytes of the buffer
             let uuid = uuid::Uuid::from_slice(&buffer[..16]).unwrap().to_string();
 
@@ -40,10 +44,8 @@ pub async fn start_udp_server(
                     }
                 };
                 // send the buffer to the channel and log on error
-                if let Err(e) = channel.send(parse_payload(buffer[..size].to_vec())) {
-                    error!("failed to send to channel; error = {:?}", e);
-                    // channels.uuid_sender_map.remove(&uuid);
-                    // drop(channel);
+                if let Err(_e) = channel.send(parse_payload(buffer[..size].to_vec())) {
+                    error!("failed to send to channel; uuid = {}", uuid);
                     done = true;
                 }
                 if size == 32 || done {

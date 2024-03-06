@@ -3,16 +3,24 @@ pub mod mcs {
 }
 
 mod http_server;
+mod settings;
 mod udp_server;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast::Sender;
 use tracing::info;
+use tracing_appender::rolling::daily;
 
 use crate::http_server::start_http_server;
 use crate::mcs::Payload;
 use crate::udp_server::start_udp_server;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref CONFIG: settings::Settings =
+        settings::Settings::new().expect("config cannot be loaded");
+}
 
 #[derive(Debug, Default, Clone)]
 struct AddressPayload {
@@ -21,7 +29,7 @@ struct AddressPayload {
 }
 
 impl AddressPayload {
-    fn new (uuid: String, payload_type: i32, address: String, event_data: String) -> Self {
+    fn new(uuid: String, payload_type: i32, address: String, event_data: String) -> Self {
         let payload = Payload {
             uuid,
             payload_type,
@@ -31,7 +39,7 @@ impl AddressPayload {
         AddressPayload { address, payload }
     }
 
-    fn new_with_event_data (uuid: String, payload_type: i32, event_data: String) -> Self {
+    fn new_with_event_data(uuid: String, payload_type: i32, event_data: String) -> Self {
         let payload = Payload {
             uuid,
             payload_type,
@@ -52,12 +60,24 @@ struct UuidChannels {
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt().json().flatten_event(true).init();
-    info!("starting mcs-ds server");
+    init_log();
+    info!("starting mcs server");
     let channels = Arc::new(Mutex::new(UuidChannels::default()));
     tokio::try_join!(
         start_http_server(Arc::clone(&channels)),
-        start_udp_server(Arc::clone(&channels))
+        start_udp_server(Arc::clone(&channels)),
     )?;
     Ok(())
+}
+
+fn init_log () {
+    let logger = tracing_subscriber::fmt().json().flatten_event(true);  
+    if CONFIG.log.appender == "file" {
+        let file_appender = daily(
+             CONFIG.log.log_dir.clone(), 
+             CONFIG.log.log_prefix.clone());
+        logger.with_writer(file_appender).init();
+    } else {
+        logger.init();
+    }
 }

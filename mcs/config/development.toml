@@ -1,0 +1,7 @@
+
+[log]
+appender = "console"
+log_dir = "./target/log"
+
+[udp_server]
+socket_file = "/tmp/mcs.sock"
