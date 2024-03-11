@@ -15,8 +15,9 @@
 #define EVENT_CAST_MASK      "mod_audio_cast::mask"
 #define EVENT_CAST_UNMASK    "mod_audio_cast::unmask"
 #define EVENT_CAST_CLOSE     "mod_audio_cast::close"
+#define EVENT_CAST_FAILED    "mod_audio_cast::failed"
 
-typedef void (*responseHandler_t)(switch_core_session_t* session, const char* eventName, int last_seq, const char* address, char* json);
+typedef void (*responseHandler_t)(switch_core_session_t* session, const char* eventName, int last_seq, const char* address, char* json, char* action);
 
 struct private_data {
   switch_mutex_t *mutex;

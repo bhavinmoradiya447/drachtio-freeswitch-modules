@@ -230,7 +230,7 @@ switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char 
         delete p; 
       }
     }
-    tech_pvt->responseHandler(session, EVENT_CAST_CLOSE, tech_pvt->seq, NULL, NULL);
+    tech_pvt->responseHandler(session, EVENT_CAST_CLOSE, tech_pvt->seq, NULL, NULL, NULL);
     destroy_tech_pvt(tech_pvt);
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "(%u) audio_cast_session_cleanup: connection closed\n", id);
     return SWITCH_STATUS_SUCCESS;
@@ -250,9 +250,9 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
     switch_core_media_bug_flush(bug);
     tech_pvt->audio_masked = mask;
     if(mask) {
-        tech_pvt->responseHandler(session, EVENT_CAST_MASK, tech_pvt->seq, NULL, NULL);
+        tech_pvt->responseHandler(session, EVENT_CAST_MASK, tech_pvt->seq, NULL, NULL, NULL);
     } else {
-      tech_pvt->responseHandler(session, EVENT_CAST_UNMASK, tech_pvt->seq, NULL, NULL);
+      tech_pvt->responseHandler(session, EVENT_CAST_UNMASK, tech_pvt->seq, NULL, NULL, NULL);
     }
     return SWITCH_STATUS_SUCCESS;
 }
@@ -271,9 +271,9 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
     switch_core_media_bug_flush(bug);
     tech_pvt->audio_paused = pause;
     if(pause) {
-        tech_pvt->responseHandler(session, EVENT_CAST_PAUSE, tech_pvt->seq, NULL, NULL);
+        tech_pvt->responseHandler(session, EVENT_CAST_PAUSE, tech_pvt->seq, NULL, NULL, NULL);
     } else {
-      tech_pvt->responseHandler(session, EVENT_CAST_RESUME, tech_pvt->seq, NULL, NULL);
+      tech_pvt->responseHandler(session, EVENT_CAST_RESUME, tech_pvt->seq, NULL, NULL, NULL);
     }
     return SWITCH_STATUS_SUCCESS;
   }

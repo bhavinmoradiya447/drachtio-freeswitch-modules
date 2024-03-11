@@ -12,7 +12,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_audio_cast_load);
  */
 SWITCH_MODULE_DEFINITION(mod_audio_cast, mod_audio_cast_load, mod_audio_cast_shutdown, NULL);
 
-static void responseHandler(switch_core_session_t* session, const char* eventName, int last_seq, const char* address, char* payload) {
+static void responseHandler(switch_core_session_t* session, const char* eventName, int last_seq, const char* address, char* payload, char* action) {
 	switch_event_t *event;
     int duration_ms = 320 * (last_seq -1 ) / 2 / 8; // per packet data byte * number of packets / 2 channel / 8k bit rate
 
@@ -23,6 +23,7 @@ static void responseHandler(switch_core_session_t* session, const char* eventNam
     if (address) switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Client-Address", address);
     switch_event_add_header(event, SWITCH_STACK_BOTTOM, "duration_ms", "%d", duration_ms);
     if (payload) switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Payload", payload);
+    if (action) switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Action", action);
 
 	switch_event_fire(&event);
 }
@@ -108,8 +109,9 @@ static switch_status_t do_stop(switch_core_session_t *session, char* bugname, ch
         if (switch_core_hash_delete(tech_pvt->client_address_hash, address) != NULL 
         && SWITCH_STATUS_FALSE == audio_cast_call_mcs(session, payload, "http://localhost:3030/stop_cast")) {
             switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error sending stop to mcs.\n");
+            return SWITCH_STATUS_FALSE;
         }
-        tech_pvt->responseHandler(session, EVENT_CAST_STOP, tech_pvt->seq, address, payload);
+        tech_pvt->responseHandler(session, EVENT_CAST_STOP, tech_pvt->seq, address, payload, NULL);
         if(switch_hashtable_count(tech_pvt->client_address_hash) == 0){
             status = audio_cast_session_cleanup(session, bugname, 0);
         }
@@ -146,7 +148,7 @@ static switch_status_t start_capture(switch_core_session_t *session,
             switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Error sending start to mcs.\n");
             return SWITCH_STATUS_FALSE;
         }
-        tech_pvt->responseHandler(session, EVENT_CAST_START, tech_pvt->seq, address, payload);
+        tech_pvt->responseHandler(session, EVENT_CAST_START, tech_pvt->seq, address, payload, NULL);
         return SWITCH_STATUS_SUCCESS;
     }
 
@@ -179,7 +181,7 @@ static switch_status_t start_capture(switch_core_session_t *session,
     {
         private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
         switch_core_hash_insert(tech_pvt->client_address_hash, address, address);
-        tech_pvt->responseHandler(session, EVENT_CAST_START, tech_pvt->seq, address, payload);
+        tech_pvt->responseHandler(session, EVENT_CAST_START, tech_pvt->seq, address, payload, NULL);
     }
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "exiting start_capture.\n");
     return SWITCH_STATUS_SUCCESS;
@@ -212,6 +214,8 @@ SWITCH_STANDARD_API(cast_function)
     int argc = 0;
     switch_status_t status = SWITCH_STATUS_FALSE;
     char *bugname = "audio_cast";
+    switch_core_session_t *lsession = NULL;
+
 
     if (!zstr(cmd) && (mycmd = strdup(cmd))) {
         argc = switch_separate_string(mycmd, ' ', argv, (sizeof(argv) / sizeof(argv[0])));
@@ -226,23 +230,38 @@ SWITCH_STANDARD_API(cast_function)
         stream->write_function(stream, "-USAGE: %s\n", CAST_API_SYNTAX);
         goto done;
     } else {
-        switch_core_session_t *lsession = NULL;
 
         if ((lsession = switch_core_session_locate(argv[0]))) {
             if (!strcasecmp(argv[1], "stop")) {
                 status = do_stop(lsession, bugname, argv[2] );
+                 if (status != SWITCH_STATUS_SUCCESS) {
+                     const char* address = cJSON_GetObjectCstr(cJSON_Parse(argv[2]), "address");
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, address, argv[2], "stop");
+                 }
               }
             else if (!strcasecmp(argv[1], "pause")) {
                 status = do_pauseresume(lsession, bugname, 1);
+                if (status != SWITCH_STATUS_SUCCESS) {
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, "pause");
+                }
             }
             else if (!strcasecmp(argv[1], "resume")) {
                 status = do_pauseresume(lsession, bugname, 0);
+                if (status != SWITCH_STATUS_SUCCESS) {
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, "pause");
+                }
             }
             else if (!strcasecmp(argv[1], "mask")) {
                 status = do_maskunmask(lsession, bugname, 1);
+                if (status != SWITCH_STATUS_SUCCESS) {
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, "pause");
+                }
             }
             else if (!strcasecmp(argv[1], "unmask")) {
                 status = do_maskunmask(lsession, bugname, 0);
+                if (status != SWITCH_STATUS_SUCCESS) {
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, "pause");
+                }
             }
             else if (!strcasecmp(argv[1], "start")) {
                 int sampling = 8000;
@@ -250,9 +269,16 @@ SWITCH_STANDARD_API(cast_function)
                 flags |= SMBF_WRITE_STREAM ;
                 flags |= SMBF_STEREO;
                 status = start_capture(lsession, flags, sampling, bugname, argv[2]);
+                if (status != SWITCH_STATUS_SUCCESS) {
+                     const char* address = cJSON_GetObjectCstr(cJSON_Parse(argv[2]), "address");
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, address, argv[2], "start");
+                 }
             }
             else if (!strcasecmp(argv[1], "send")) {
                 status = do_send(lsession, bugname, argv[2]);
+                if (status != SWITCH_STATUS_SUCCESS) {
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, "send");
+                }
             }
             else {
                 switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "unsupported mod_audio_cast cmd: %s %s\n", argv[1], argv[2]);
@@ -293,6 +319,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_audio_cast_load)
     switch_event_reserve_subclass(EVENT_CAST_RESUME) != SWITCH_STATUS_SUCCESS ||
     switch_event_reserve_subclass(EVENT_CAST_MASK) != SWITCH_STATUS_SUCCESS ||
     switch_event_reserve_subclass(EVENT_CAST_UNMASK) != SWITCH_STATUS_SUCCESS ||
+    switch_event_reserve_subclass(EVENT_CAST_FAILED) != SWITCH_STATUS_SUCCESS ||
     switch_event_reserve_subclass(EVENT_CAST_CLOSE) != SWITCH_STATUS_SUCCESS) {
 
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't register an event subclass for mod_audio_cast API.\n");
@@ -328,6 +355,8 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_audio_cast_shutdown)
 	switch_event_free_subclass(EVENT_CAST_MASK);
 	switch_event_free_subclass(EVENT_CAST_UNMASK);
 	switch_event_free_subclass(EVENT_CAST_CLOSE);
+    switch_event_free_subclass(EVENT_CAST_FAILED);
+    
 
     return SWITCH_STATUS_SUCCESS;
 }
