@@ -312,10 +312,6 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_audio_cast_load)
 
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "mod_audio_cast API successfully loaded\n");
 
-    /* indicate that the module should continue to be loaded */
-  //mod_running = 1;
-
-
     return SWITCH_STATUS_SUCCESS;
 }
 /*

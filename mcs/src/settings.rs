@@ -65,7 +65,7 @@ impl Settings {
         setting.set("env", env.clone())?;
 
         setting.merge(File::with_name(CONFIG_FILE_PATH))?;
-        setting.merge(File::with_name(&format!("{}{}", CONFIG_FILE_PREFIX, env)))?;
+        setting.merge(File::with_name(&format!("{}{}.toml", CONFIG_FILE_PREFIX, env.to_lowercase())))?;
 
         // This makes it so "EA_SERVER__PORT overrides server.port
         setting.merge(Environment::with_prefix("ea").separator("__"))?;
@@ -74,5 +74,5 @@ impl Settings {
     }
 }
 
-const CONFIG_FILE_PATH: &str = "./config/Default.toml";
+const CONFIG_FILE_PATH: &str = "./config/default.toml";
 const CONFIG_FILE_PREFIX: &str = "./config/";

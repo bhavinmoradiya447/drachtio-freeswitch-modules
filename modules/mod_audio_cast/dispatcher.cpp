@@ -60,7 +60,6 @@ void dispatcher::dispatch(payload * p) {
             
     if(p->size !=0 ) {
         if(!batch_buf){
-            //batch_buf = (char*)realloc(p->buf, p->size);
             batch_buf = (char*)realloc(buf, p->size);
             batch_buf_len = p->size;
         } else {
@@ -82,7 +81,6 @@ void dispatcher::dispatch(payload * p) {
         }
         dispatch_to_ds(buf, p->size, p->id, seq++, p->timestamp);            
     } 
-    //close(fd);
 }
 
 char* dispatcher::concat(char* a, size_t a_size, char* b, size_t b_size) {

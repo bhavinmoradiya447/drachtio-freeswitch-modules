@@ -11,7 +11,8 @@ enum PayloadType {
     AUDIO_SPLIT = 1;
     AUDIO_START = 2;
     AUDIO_STOP = 3;
-    EVENT_DATA = 4;
+    AUDIO_END = 4;
+    EVENT_DATA = 5;
 }
 
 message  Payload {

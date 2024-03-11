@@ -68,12 +68,10 @@ namespace {
 extern "C" {
 
   switch_status_t audio_cast_init() {
-   //dispatcher::get_instance();
    return SWITCH_STATUS_SUCCESS;
   }
 
   switch_status_t audio_cast_cleanup() {
- //   dispatcher::get_instance()->stop();
     return SWITCH_STATUS_SUCCESS;
   }
 
@@ -208,7 +206,6 @@ switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char 
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "(%u) audio_cast_session_cleanup\n", id);
 
     if (!tech_pvt) return SWITCH_STATUS_FALSE;
-    //AudioPipe *pAudioPipe = static_cast<AudioPipe *>(tech_pvt->pAudioPipe);
       
     switch_mutex_lock(tech_pvt->mutex);
 
@@ -317,18 +314,14 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
     private_t* tech_pvt = (private_t*) switch_core_media_bug_get_user_data(bug);
 
     if (!tech_pvt || tech_pvt->audio_paused || tech_pvt->graceful_shutdown) return SWITCH_TRUE;
-    
-  // TODO:: Add logic for mask 
-    // TODO:: Add logic for resample 
+  
     if (switch_mutex_trylock(tech_pvt->mutex) == SWITCH_STATUS_SUCCESS) {
-        //private_t* tech_pvt = (private_t *)  switch_core_media_bug_get_user_data(bug);
         uint8_t data[SWITCH_RECOMMENDED_BUFFER_SIZE];
         switch_frame_t frame = { 0 };
         frame.data = data;
         frame.buflen = SWITCH_RECOMMENDED_BUFFER_SIZE;
         
         while (switch_core_media_bug_read(bug, &frame, SWITCH_TRUE) == SWITCH_STATUS_SUCCESS) {
-//           write(fd, frame.data , frame.datalen);
           if( tech_pvt->audio_masked ) { 
              unsigned char null_data[SWITCH_RECOMMENDED_BUFFER_SIZE] = {0};
             memcpy(frame.data, null_data, frame.datalen);
