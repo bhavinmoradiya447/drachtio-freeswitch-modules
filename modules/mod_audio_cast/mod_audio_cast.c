@@ -23,7 +23,10 @@ static void responseHandler(switch_core_session_t* session, const char* eventNam
     if (address) switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Client-Address", address);
     switch_event_add_header(event, SWITCH_STACK_BOTTOM, "duration_ms", "%d", duration_ms);
     if (payload) switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Payload", payload);
-    if (action) switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Action", action);
+    if (action) {
+        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Action", action);
+        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Reason", "Media Server Error");
+    }
 
 	switch_event_fire(&event);
 }
