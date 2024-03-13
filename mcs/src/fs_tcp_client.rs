@@ -11,7 +11,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::time::sleep;
-use crate::{CONFIG, fs_tcp_client};
+use crate::CONFIG;
 
 #[derive(Debug)]
 struct CommandClient(TcpStream);
@@ -132,10 +132,11 @@ async fn process_command(mut command_client: StubbornIo<CommandClient, String>, 
 
 type FsCommandClient<A> = StubbornIo<CommandClient, A>;
 
-pub async fn start_fs_esl_client(mut event_receiver: UnboundedReceiver<String>, event_sender: UnboundedSender<String>, host_name: String) {
+pub async fn start_fs_esl_client(event_receiver: UnboundedReceiver<String>, event_sender: UnboundedSender<String>, host_name: String) ->  Result<(), Box<dyn std::error::Error>>{
     let options = ReconnectOptions::new().with_exit_if_first_connect_fails(false).with_retries_generator(|| {
         iter::repeat(Duration::from_secs(1))
     });
     let stream: StubbornIo<CommandClient, String> = FsCommandClient::connect_with_options(host_name, options).await.unwrap();
     process_command(stream, event_sender, event_receiver).await;
+    Ok(())
 }
