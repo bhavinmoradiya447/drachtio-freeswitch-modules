@@ -760,6 +760,7 @@ dependencies = [
  "prost",
  "serde 1.0.197",
  "serde_json",
+ "stubborn-io",
  "tokio",
  "tonic",
  "tonic-build",
@@ -1387,6 +1388,17 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "stubborn-io"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cc21d6dc10a89b8004044f2eba7e2239738fbad57b19d5295e2c446f092292c"
+dependencies = [
+ "log",
+ "rand",
+ "tokio",
+]
 
 [[package]]
 name = "syn"

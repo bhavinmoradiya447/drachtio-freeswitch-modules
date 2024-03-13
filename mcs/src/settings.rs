@@ -12,6 +12,12 @@ pub struct Log {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+pub struct EslClient {
+    pub host: String,
+    pub auth: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct HttpServer {
     pub port: u16,
     pub url: String,
@@ -50,12 +56,14 @@ impl From<&str> for ENV {
         }
     }
 }
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct Settings {
     pub log: Log,
     pub http_server: HttpServer,
     pub udp_server: UdpServer,
     pub env: ENV,
+    pub fs_esl_client: EslClient,
 }
 
 impl Settings {

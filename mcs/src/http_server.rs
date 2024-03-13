@@ -1,9 +1,12 @@
 use std::collections::HashMap;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::broadcast;
+use tokio::sync::mpsc::UnboundedSender;
 use tonic::service::interceptor::InterceptedService;
 use tonic::transport::{Channel, Uri};
 use tonic::Status;
@@ -20,10 +23,12 @@ pub mod mcs {
     tonic::include_proto!("mcs");
 }
 
-use crate::mcs::multi_cast_service_client::MultiCastServiceClient;
-use crate::mcs::PayloadType;
-use crate::mcs::Payload;
+use crate::mcs::media_cast_service_client::MediaCastServiceClient;
+use crate::mcs::DialogRequestPayloadType;
+use crate::mcs::DialogRequestPayload;
 use crate::AddressPayload;
+use crate::mcs::DialogResponsePayload;
+use crate::mcs::DialogResponsePayloadType;
 use crate::UuidChannels;
 use crate::CONFIG;
 
@@ -37,22 +42,24 @@ impl tonic::service::Interceptor for TokenInterceptor {
             let bearer_token = format!("Bearer {}", token);
             request.metadata_mut().insert("authorization", bearer_token.parse().unwrap());
         }
-        Ok(request) 
+        Ok(request)
     }
 }
 
 
 #[derive(Debug, Default)]
 struct AddressClients {
-    clients: HashMap<String, MultiCastServiceClient<InterceptedService<Channel, TokenInterceptor>>>,
+    clients: HashMap<String, MediaCastServiceClient<InterceptedService<Channel, TokenInterceptor>>>,
 }
+
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 pub async fn start_http_server(
     uuid_channels: Arc<Mutex<UuidChannels>>,
+    event_sender: UnboundedSender<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-
     let with_uuid_channel = warp::any().map(move || Arc::clone(&uuid_channels));
+    let with_event_sender = warp::any().map(move || event_sender.clone());
 
     let address_client = Arc::new(Mutex::new(AddressClients::default()));
     let with_address_client = warp::any().map(move || Arc::clone(&address_client));
@@ -62,18 +69,21 @@ pub async fn start_http_server(
         .and(warp::body::json())
         .and(with_uuid_channel.clone())
         .and(with_address_client.clone())
+        .and(with_event_sender.clone())
         .and_then(start_cast_handler);
 
     let stop_cast = warp::path!("stop_cast")
         .and(warp::post())
         .and(warp::body::json())
         .and(with_uuid_channel.clone())
+        .and(with_event_sender.clone())
         .and_then(stop_cast_handler);
 
     let dispatch_event = warp::path!("dispatch_event")
         .and(warp::post())
         .and(warp::body::json())
         .and(with_uuid_channel)
+        .and(with_event_sender.clone())
         .and_then(dispatch_event_handler);
 
     let ping = warp::path!("ping")
@@ -92,24 +102,24 @@ pub async fn start_http_server(
     Ok(())
 }
 
-fn init_open_api() -> impl Filter<Extract = (impl Reply,), Error = warp::Rejection> + Clone {
+fn init_open_api() -> impl Filter<Extract=(impl Reply, ), Error=warp::Rejection> + Clone {
     #[derive(OpenApi)]
     #[openapi(
-        paths(
-            crate::http_server::start_cast_handler, 
-            crate::http_server::dispatch_event_handler, 
-            crate::http_server::stop_cast_handler,
-            crate::http_server::ping_handler,
-        ),
-        components(
-            schemas(crate::http_server::StartCastRequest, 
-                crate::http_server::DispatchEventRequest, 
-                crate::http_server::StopCastRequest,
-            ),
-        ),
-        tags(
-            (name = "MCS API", description = "Multi Cast Streamer API")
-        )
+    paths(
+    crate::http_server::start_cast_handler,
+    crate::http_server::dispatch_event_handler,
+    crate::http_server::stop_cast_handler,
+    crate::http_server::ping_handler,
+    ),
+    components(
+    schemas(crate::http_server::StartCastRequest,
+    crate::http_server::DispatchEventRequest,
+    crate::http_server::StopCastRequest,
+    ),
+    ),
+    tags(
+    (name = "MCS API", description = "Multi Cast Streamer API")
+    )
     )]
     struct ApiDoc;
 
@@ -119,7 +129,7 @@ fn init_open_api() -> impl Filter<Extract = (impl Reply,), Error = warp::Rejecti
     api_doc
 }
 
-fn init_swagger_ui() -> impl Filter<Extract = (impl Reply,), Error = warp::Rejection> + Clone {
+fn init_swagger_ui() -> impl Filter<Extract=(impl Reply, ), Error=warp::Rejection> + Clone {
     let config = Arc::new(Config::from("/api-doc.json"));
     let swagger_ui = warp::path("swagger-ui")
         .and(warp::get())
@@ -178,6 +188,7 @@ async fn start_cast_handler(
     request: StartCastRequest,
     channels: Arc<Mutex<UuidChannels>>,
     address_client: Arc<Mutex<AddressClients>>,
+    event_sender: UnboundedSender<String>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let count = COUNTER.fetch_add(1, SeqCst);
     let uuid = request.uuid.clone();
@@ -199,7 +210,7 @@ async fn start_cast_handler(
                 address, group
             );
             let grpc_channel = Channel::builder(address_uri).connect_lazy();
-            let grpc_client = MultiCastServiceClient::with_interceptor(
+            let grpc_client = MediaCastServiceClient::with_interceptor(
                 grpc_channel, TokenInterceptor);
             address_client
                 .clients
@@ -227,20 +238,30 @@ async fn start_cast_handler(
                 let payload_type = addr_payload.payload.payload_type;
                 process_payload(&mut addr_payload.payload, mode.clone(), codec.clone());
                 yield addr_payload.payload;
-                if payload_type == eval(&PayloadType::AudioEnd)
-                    || (payload_type == eval(&PayloadType::AudioStop) && address == addr_payload.address) {
+                if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
+                    || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address == addr_payload.address) {
                     info!("done streaming for uuid: {} to: {}", uuid, address);
                     break;
                 }
             }
         };
         let request = tonic::Request::new(payload_stream);
-        let _response = client.listen(request).await.unwrap();
+        let response = client.dialog(request).await.unwrap();
+        // create a task to process response payload stream
+        tokio::spawn(async move {
+            let mut response = response.into_inner();
+            while let Some(payload) = response.message().await.unwrap() {
+                if payload.payload_type == eval1(&DialogResponsePayloadType::ResponseEnd) {
+                    break;
+                }
+                process_response_payload(&payload);
+            }
+        });
     });
 
     if let Err(e) = channel.send(AddressPayload::new_with_event_data(
         uuid_clone,
-        PayloadType::AudioStart.into(),
+        DialogRequestPayloadType::AudioStart.into(),
         metadata,
     )) {
         info!("failed to send to channel; error = {:?}", e);
@@ -251,17 +272,46 @@ async fn start_cast_handler(
     Ok(warp::reply::json(&"ok"))
 }
 
-fn process_payload (payload: &mut Payload, mode: String, codec: String) {
-    if payload.payload_type == eval(&PayloadType::AudioCombined) && mode == "split" {
+fn process_response_payload(payload: &DialogResponsePayload) {
+    // open file /tmp/{payload.uuid}.wav in append mode
+    // write payload.audio to file
+    // close file
+    // log error on failure
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(format!("/tmp/{}.wav", payload.data))
+        .unwrap();
+    if let Err(e) = file.write_all(&payload.audio) {
+        error!("failed to write to file; error = {:?}", e);
+    }
+    if let Err(e) = file.sync_all() {
+        error!("failed to sync file; error = {:?}", e);
+    }
+    if payload.payload_type == eval(&DialogRequestPayloadType::AudioEnd)
+        || payload.payload_type == eval(&DialogRequestPayloadType::AudioStop) {
+        if let Err(e) = file.flush() {
+            error!("failed to flush file; error = {:?}", e);
+        }
+    }
+}
+
+fn process_payload(payload: &mut DialogRequestPayload, mode: String, codec: String) {
+    if payload.payload_type == eval(&DialogRequestPayloadType::AudioCombined) && mode == "split" {
         let (left, right) = handle_split(&payload.audio, codec.clone());
         payload.audio_left = left;
         payload.audio_right = right;
-        payload.payload_type = PayloadType::AudioSplit.into();
+        payload.payload_type = DialogRequestPayloadType::AudioSplit.into();
         payload.audio.clear();
     }
 }
 
-fn eval(payload_type: &PayloadType) -> i32 {
+fn eval(payload_type: &DialogRequestPayloadType) -> i32 {
+    *payload_type as i32
+}
+
+fn eval1(payload_type: &DialogResponsePayloadType) -> i32 {
     *payload_type as i32
 }
 
@@ -299,6 +349,7 @@ struct DispatchEventRequest {
 async fn dispatch_event_handler(
     request: DispatchEventRequest,
     channels: Arc<Mutex<UuidChannels>>,
+    event_sender: UnboundedSender<String>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let channels = channels.lock().unwrap();
     let channel = match channels.uuid_sender_map.get(&request.uuid) {
@@ -311,7 +362,7 @@ async fn dispatch_event_handler(
 
     if let Err(e) = channel.send(AddressPayload::new_with_event_data(
         request.uuid,
-        PayloadType::EventData.into(),
+        DialogRequestPayloadType::EventData.into(),
         request.event_data,
     )) {
         info!("failed to send to channel; error = {:?}", e);
@@ -333,6 +384,7 @@ struct StopCastRequest {
 async fn stop_cast_handler(
     request: StopCastRequest,
     channels: Arc<Mutex<UuidChannels>>,
+    event_sender: UnboundedSender<String>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let channels = channels.lock().unwrap();
     let channel = match channels.uuid_sender_map.get(&request.uuid) {
@@ -345,7 +397,7 @@ async fn stop_cast_handler(
     };
     if let Err(e) = channel.send(AddressPayload::new(
         request.uuid,
-        PayloadType::AudioStop.into(),
+        DialogRequestPayloadType::AudioStop.into(),
         request.address,
         request.metadata.unwrap_or("".to_string()),
     )) {
@@ -361,6 +413,7 @@ async fn stop_cast_handler(
 pub async fn ping_handler() -> Result<impl warp::Reply, warp::Rejection> {
     Ok(warp::reply::json(&"pong"))
 }
+
 // unit tests
 #[cfg(test)]
 mod tests {

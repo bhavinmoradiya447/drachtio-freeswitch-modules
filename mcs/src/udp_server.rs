@@ -4,9 +4,9 @@ use uuid::Uuid;
 use tokio::net::UnixDatagram;
 use tracing::{error, info, trace};
 
-use crate::mcs::PayloadType;
+use crate::mcs::DialogRequestPayloadType;
 use crate::{UuidChannels, CONFIG};
-use crate::{AddressPayload, Payload};
+use crate::{AddressPayload, DialogRequestPayload};
 
 pub async fn start_udp_server(
     channels: Arc<Mutex<UuidChannels>>,
@@ -61,14 +61,14 @@ pub async fn start_udp_server(
 }
 
 fn parse_payload(buf: Vec<u8>) -> AddressPayload {
-    let mut payload = Payload::default();
+    let mut payload = DialogRequestPayload::default();
     payload.uuid = Uuid::from_slice(&buf[0..16]).unwrap().to_string();
     payload.timestamp = u64::from_ne_bytes(buf[20..28].try_into().unwrap());
     payload.audio = buf[32..].to_vec();
     if payload.audio.len() > 0 {
-        payload.payload_type = PayloadType::AudioCombined.into();
+        payload.payload_type = DialogRequestPayloadType::AudioCombined.into();
     } else {
-        payload.payload_type = PayloadType::AudioStop.into();
+        payload.payload_type = DialogRequestPayloadType::AudioStop.into();
     }
     AddressPayload {
         payload,

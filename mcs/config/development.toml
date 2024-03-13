@@ -1,7 +1,11 @@
 
 [log]
-appender = "console"
+appender = "file"
 log_dir = "./target/log"
 
 [udp_server]
 socket_file = "/tmp/mcs.sock"
+
+[fs_esl_client]
+host = "127.0.0.1:8021"
+auth = "Lcqzoc4e!zk3C3!#"
