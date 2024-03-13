@@ -10,7 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tonic::service::interceptor::InterceptedService;
 use tonic::transport::{Channel, Uri};
 use tonic::Status;
-use tracing::{error, info, instrument, metadata};
+use tracing::{error, info, instrument};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::Config;
 use warp::{
@@ -18,7 +18,6 @@ use warp::{
     path::{FullPath, Tail},
     Filter, Rejection, Reply,
 };
-use warp::test::request;
 
 pub mod mcs {
     tonic::include_proto!("mcs");
@@ -239,14 +238,14 @@ async fn start_cast_handler(
             while let Ok(mut addr_payload) = receiver.recv().await {
                 let payload_type = addr_payload.payload.payload_type;
                 process_payload(&mut addr_payload.payload, mode.clone(), codec.clone());
-                if((payload_type == eval(&DialogRequestPayloadType::AudioStart) && address != addr_payload.address)) {
+                if payload_type == eval(&DialogRequestPayloadType::AudioStart) && address != addr_payload.address {
                     continue;
                 }
                 yield addr_payload.payload;
                 if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
                     || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address == addr_payload.address) {
                     info!("done streaming for uuid: {} to: {}", uuid, address);
-                    if(payload_type == eval(&DialogRequestPayloadType::AudioEnd)) {
+                    if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
                          std::fs::remove_dir_all(format!("/tmp/{}", uuid)).expect("Failed to remove Directory");
                     }
                     break;
@@ -256,31 +255,32 @@ async fn start_cast_handler(
         let request = tonic::Request::new(payload_stream);
         let event_sender1 = event_sender.clone();
         match client.dialog(request).await {
-            Ok(response) => tokio::spawn(async move {
-                let mut is_first_message = true;
+            Ok(response) => {
+                tokio::spawn(async move {
+                    let mut is_first_message = true;
 
-                let mut response = response.into_inner();
-                while let Some(payload) = response.message().await.unwrap() {
-                    if is_first_message && payload.payload_type == eval1(&DialogResponsePayloadType::DialogEnd) {
-                        event_sender1.send(get_start_failed_event_command(uuid.clone().as_str(),
-                                                                          address.clone().as_str(),
-                                                                          payload.data.as_str(),
-                                                                          "client-failed"))
-                            .expect("Failed to send start client error");
-                    } else if is_first_message {
-                        event_sender1.send(get_start_success_event_command(uuid.clone().as_str(),
-                                                                           address.clone().as_str(),
-                                                                           metadata.clone().as_str()))
-                            .expect("Failed to send start success event");
+                    let mut response = response.into_inner();
+                    while let Some(payload) = response.message().await.unwrap() {
+                        if is_first_message && payload.payload_type == eval1(&DialogResponsePayloadType::DialogEnd) {
+                            event_sender1.send(get_start_failed_event_command(uuid.clone().as_str(),
+                                                                              address.clone().as_str(),
+                                                                              payload.data.as_str(),
+                                                                              "client-failed"))
+                                .expect("Failed to send start client error");
+                        } else if is_first_message {
+                            event_sender1.send(get_start_success_event_command(uuid.clone().as_str(),
+                                                                               address.clone().as_str(),
+                                                                               metadata.clone().as_str()))
+                                .expect("Failed to send start success event");
+                        }
+                        is_first_message = false;
+                        if payload.payload_type == eval1(&DialogResponsePayloadType::ResponseEnd) {
+                            break;
+                        }
+                        process_response_payload(uuid.clone().as_str(), address.clone().as_str(), &payload, event_sender1.clone());
                     }
-                    is_first_message = false;
-                    if payload.payload_type == eval1(&DialogResponsePayloadType::ResponseEnd) {
-                        break;
-                    }
-                    process_response_payload(uuid.clone().as_str(), address.clone().as_str(), &payload, event_sender1.clone());
-                }
-            }),
-
+                });
+            }
             Err(e) => {
                 error!("Error connecting client {} , {}", address.clone(), e.message());
                 event_sender.send(get_start_failed_event_command(uuid.clone().as_str(),
