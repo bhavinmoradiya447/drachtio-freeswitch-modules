@@ -435,10 +435,10 @@ async fn stop_cast_handler(
     let address = request.address;
     let metadata = request.metadata.unwrap_or("".to_string());
     let channels = channels.lock().unwrap();
-    let channel = match channels.uuid_sender_map.get(&request.uuid) {
+    let channel = match channels.uuid_sender_map.get(&uuid) {
         Some(channel) => Some(channel.clone()),
         None => {
-            error!("channel not found for uuid: {}", request.uuid);
+            error!("channel not found for uuid: {}", uuid);
             // throw error if channel does not exist
             //return Err(warp::reject());
             event_sender.send(get_stop_failed_event_command(uuid.clone().as_str(),
