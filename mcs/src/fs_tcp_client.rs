@@ -141,3 +141,63 @@ pub async fn start_fs_esl_client(event_receiver: UnboundedReceiver<String>, even
     process_command(stream, event_sender, event_receiver).await;
     Ok(())
 }
+
+pub fn get_start_success_event_command(uuid: &str, client_address: &str, payload: &str) -> String {
+    format!("sendmsg {}\n\
+    call-command: execute\n\
+    execute-app-name: event\n\
+    execute-app-arg: \
+    Event-Name=CUSTOM,\
+    Event-Subclass=mod_audio_cast::mcs::start,\
+    Client-Address={},\
+    Payload='{}'", uuid, client_address, payload)
+}
+
+pub fn get_start_failed_event_command(uuid: &str, client_address: &str, payload: &str, reason: &str) -> String {
+    format!("sendmsg {}\n\
+    call-command: execute\n\
+    execute-app-name: event\n\
+    execute-app-arg: \
+    Event-Name=CUSTOM,\
+    Event-Subclass=mod_audio_cast::mcs::failed,\
+    Action=start,\
+    Reason={},\
+    Client-Address={},\
+    Payload='{}'", uuid, reason, client_address, payload)
+}
+
+pub fn get_stop_success_event_command(uuid: &str, client_address: &str, payload: &str) -> String {
+    format!("sendmsg {}\n\
+    call-command: execute\n\
+    execute-app-name: event\n\
+    execute-app-arg: \
+    Event-Name=CUSTOM,\
+    Event-Subclass=mod_audio_cast::mcs::stop,\
+    Client-Address={},\
+    Payload='{}'", uuid, client_address, payload)
+}
+
+pub fn get_stop_failed_event_command(uuid: &str, client_address: &str, payload: &str, reason: &str) -> String {
+    format!("sendmsg {}\n\
+    call-command: execute\n\
+    execute-app-name: event\n\
+    execute-app-arg: \
+    Event-Name=CUSTOM,\
+    Event-Subclass=mod_audio_cast::mcs::failed,\
+    Action=stop,\
+    Reason={},\
+    Client-Address={},\
+    Payload='{}'", uuid, reason, client_address, payload)
+}
+
+pub fn get_event_command(uuid: &str, client_address: &str, event_type: &str, payload: &str) -> String {
+    format!("sendmsg {}\n\
+    call-command: execute\n\
+    execute-app-name: event\n\
+    execute-app-arg: \
+    Event-Name=CUSTOM,\
+    Event-Subclass=mod_audio_cast::mcs::event,\
+    Type={},\
+    Client-Address={},\
+    Payload='{}'", uuid, event_type, client_address, payload)
+}

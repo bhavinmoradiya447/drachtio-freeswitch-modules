@@ -10,7 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tonic::service::interceptor::InterceptedService;
 use tonic::transport::{Channel, Uri};
 use tonic::Status;
-use tracing::{error, info, instrument};
+use tracing::{error, info, instrument, metadata};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::Config;
 use warp::{
@@ -18,6 +18,7 @@ use warp::{
     path::{FullPath, Tail},
     Filter, Rejection, Reply,
 };
+use warp::test::request;
 
 pub mod mcs {
     tonic::include_proto!("mcs");
@@ -31,6 +32,7 @@ use crate::mcs::DialogResponsePayload;
 use crate::mcs::DialogResponsePayloadType;
 use crate::UuidChannels;
 use crate::CONFIG;
+use crate::fs_tcp_client::{get_event_command, get_start_failed_event_command, get_start_success_event_command, get_stop_failed_event_command, get_stop_success_event_command};
 
 #[derive(Debug, Default, Clone)]
 struct TokenInterceptor;
@@ -237,62 +239,103 @@ async fn start_cast_handler(
             while let Ok(mut addr_payload) = receiver.recv().await {
                 let payload_type = addr_payload.payload.payload_type;
                 process_payload(&mut addr_payload.payload, mode.clone(), codec.clone());
+                if((payload_type == eval(&DialogRequestPayloadType::AudioStart) && address != addr_payload.address)) {
+                    continue;
+                }
                 yield addr_payload.payload;
                 if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
                     || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address == addr_payload.address) {
                     info!("done streaming for uuid: {} to: {}", uuid, address);
+                    if(payload_type == eval(&DialogRequestPayloadType::AudioEnd)) {
+                         std::fs::remove_dir_all(format!("/tmp/{}", uuid)).expect("Failed to remove Directory");
+                    }
                     break;
                 }
             }
         };
         let request = tonic::Request::new(payload_stream);
-        let response = client.dialog(request).await.unwrap();
-        // create a task to process response payload stream
-        tokio::spawn(async move {
-            let mut response = response.into_inner();
-            while let Some(payload) = response.message().await.unwrap() {
-                if payload.payload_type == eval1(&DialogResponsePayloadType::ResponseEnd) {
-                    break;
+        let event_sender1 = event_sender.clone();
+        match client.dialog(request).await {
+            Ok(response) => tokio::spawn(async move {
+                let mut is_first_message = true;
+
+                let mut response = response.into_inner();
+                while let Some(payload) = response.message().await.unwrap() {
+                    if is_first_message && payload.payload_type == eval1(&DialogResponsePayloadType::DialogEnd) {
+                        event_sender1.send(get_start_failed_event_command(uuid.clone().as_str(),
+                                                                          address.clone().as_str(),
+                                                                          payload.data.as_str(),
+                                                                          "client-failed"))
+                            .expect("Failed to send start client error");
+                    } else if is_first_message {
+                        event_sender1.send(get_start_success_event_command(uuid.clone().as_str(),
+                                                                           address.clone().as_str(),
+                                                                           metadata.clone().as_str()))
+                            .expect("Failed to send start success event");
+                    }
+                    is_first_message = false;
+                    if payload.payload_type == eval1(&DialogResponsePayloadType::ResponseEnd) {
+                        break;
+                    }
+                    process_response_payload(uuid.clone().as_str(), address.clone().as_str(), &payload, event_sender1.clone());
                 }
-                process_response_payload(&payload);
+            }),
+
+            Err(e) => {
+                error!("Error connecting client {} , {}", address.clone(), e.message());
+                event_sender.send(get_start_failed_event_command(uuid.clone().as_str(),
+                                                                 address.clone().as_str(),
+                                                                 metadata.clone().as_str(),
+                                                                 "connection-failed"))
+                    .expect("Failed to send start failed event");
             }
-        });
+        };
     });
 
-    if let Err(e) = channel.send(AddressPayload::new_with_event_data(
-        uuid_clone,
+    if let Err(e) = channel.send(AddressPayload::new(
+        request.uuid.clone(),
         DialogRequestPayloadType::AudioStart.into(),
+        request.address.clone(),
         metadata,
     )) {
         info!("failed to send to channel; error = {:?}", e);
-        return Err(warp::reject());
+        //return Err(warp::reject());
     }
 
     info!("returning ok");
     Ok(warp::reply::json(&"ok"))
 }
 
-fn process_response_payload(payload: &DialogResponsePayload) {
-    // open file /tmp/{payload.uuid}.wav in append mode
+fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponsePayload, event_sender: UnboundedSender<String>) {
+    // open file /tmp/uuid/{payload.uuid}.wav in append mode
     // write payload.audio to file
     // close file
     // log error on failure
 
-    let mut file = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(format!("/tmp/{}.wav", payload.data))
-        .unwrap();
-    if let Err(e) = file.write_all(&payload.audio) {
-        error!("failed to write to file; error = {:?}", e);
-    }
-    if let Err(e) = file.sync_all() {
-        error!("failed to sync file; error = {:?}", e);
-    }
-    if payload.payload_type == eval(&DialogRequestPayloadType::AudioEnd)
-        || payload.payload_type == eval(&DialogRequestPayloadType::AudioStop) {
-        if let Err(e) = file.flush() {
-            error!("failed to flush file; error = {:?}", e);
+    if payload.payload_type == eval1(&DialogResponsePayloadType::Event) {
+        event_sender.send(get_event_command(uuid, address, "Client-Event", payload.data.as_str()))
+            .expect("Failed to send client event");
+    } else if payload.payload_type == eval1(&DialogResponsePayloadType::AudioChunk) ||
+        payload.payload_type == eval1(&DialogResponsePayloadType::EndOfAudio) {
+        let file_path = format!("/tmp/{}/{}.wav", uuid, payload.data);
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(file_path.clone())
+            .unwrap();
+        if let Err(e) = file.write_all(&payload.audio) {
+            error!("failed to write to file; error = {:?}", e);
+        }
+        if let Err(e) = file.sync_all() {
+            error!("failed to sync file; error = {:?}", e);
+        }
+        if payload.payload_type == eval1(&DialogResponsePayloadType::EndOfAudio) {
+            if let Err(e) = file.flush() {
+                error!("failed to flush file; error = {:?}", e);
+            }
+            let payload = format!("{{\"file_path\":\"{}\"}}", file_path);
+            event_sender.send(get_event_command(uuid, address, "Client-Playback", payload.as_str()))
+                .expect("Failed to send client event");
         }
     }
 }
@@ -392,7 +435,12 @@ async fn stop_cast_handler(
         None => {
             error!("channel not found for uuid: {}", request.uuid);
             // throw error if channel does not exist
-            return Err(warp::reject());
+            //return Err(warp::reject());
+            event_sender.send(get_stop_failed_event_command(request.uuid.clone().as_str(),
+                                                            request.address.clone().as_str(),
+                                                            request.metadata.unwrap_or("".to_string().clone()).as_str(),
+                                                            "Channel-Not-Exist"))
+                .expect("Failed to send stop failure");
         }
     };
     if let Err(e) = channel.send(AddressPayload::new(
@@ -402,9 +450,18 @@ async fn stop_cast_handler(
         request.metadata.unwrap_or("".to_string()),
     )) {
         info!("failed to send to channel; error = {:?}", e);
-        return Err(warp::reject());
+        //return Err(warp::reject());
+        event_sender.send(get_stop_failed_event_command(request.uuid.clone().as_str(),
+                                                        request.address.clone().as_str(),
+                                                        request.metadata.unwrap_or("".to_string().clone()).as_str(),
+                                                        "Failed-to-send"))
+            .expect("Failed to send stop failure");
     }
     info!("returning ok");
+    event_sender.send(get_stop_success_event_command(request.uuid.clone().as_str(),
+                                                     request.address.clone().as_str(),
+                                                     request.metadata.unwrap_or("".to_string().clone()).as_str()))
+        .expect("Failed to send stop success");
     Ok(warp::reply::json(&"ok"))
 }
 

@@ -68,7 +68,7 @@ fn parse_payload(buf: Vec<u8>) -> AddressPayload {
     if payload.audio.len() > 0 {
         payload.payload_type = DialogRequestPayloadType::AudioCombined.into();
     } else {
-        payload.payload_type = DialogRequestPayloadType::AudioStop.into();
+        payload.payload_type = DialogRequestPayloadType::AudioEnd.into();
     }
     AddressPayload {
         payload,
