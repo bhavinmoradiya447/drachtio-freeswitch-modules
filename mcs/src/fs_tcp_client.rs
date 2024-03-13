@@ -137,5 +137,5 @@ pub async fn start_fs_esl_client(mut event_receiver: UnboundedReceiver<String>, 
         iter::repeat(Duration::from_secs(1))
     });
     let stream: StubbornIo<CommandClient, String> = FsCommandClient::connect_with_options(host_name, options).await.unwrap();
-    process_command(stream, event_sender, event_receiver).await
+    process_command(stream, event_sender, event_receiver).await;
 }
