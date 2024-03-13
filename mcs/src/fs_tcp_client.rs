@@ -22,7 +22,7 @@ impl<A> UnderlyingIo<A> for CommandClient
 {
     fn establish(ctor_arg: A) -> Pin<Box<dyn Future<Output=Result<Self, Error>> + Send>> {
         Box::pin(async move {
-            let mut connect_result = TcpStream::connect(ctor_arg).await;
+            let connect_result = TcpStream::connect(ctor_arg).await;
 
             match connect_result {
                 Ok(mut stream) => {

@@ -65,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_log();
     info!("starting mcs server");
     let channels = Arc::new(Mutex::new(UuidChannels::default()));
-    let (event_publisher, mut event_receiver) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let (event_publisher, event_receiver) = tokio::sync::mpsc::unbounded_channel::<String>();
     tokio::try_join!(
         start_http_server(Arc::clone(&channels), event_publisher.clone()),
         start_udp_server(Arc::clone(&channels)),
