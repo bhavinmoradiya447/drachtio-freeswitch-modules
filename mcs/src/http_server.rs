@@ -234,6 +234,7 @@ async fn start_cast_handler(
     let mut receiver = channel.subscribe();
     tokio::spawn(async move {
         info!("init payload stream for uuid: {} to: {}", uuid, address);
+        let address_clone = address.clone();
         let payload_stream = async_stream::stream! {
             while let Ok(mut addr_payload) = receiver.recv().await {
                 let payload_type = addr_payload.payload.payload_type;
@@ -243,7 +244,7 @@ async fn start_cast_handler(
                 }
                 yield addr_payload.payload;
                 if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
-                    || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address == addr_payload.address) {
+                    || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address.clone() == addr_payload.address) {
                     info!("done streaming for uuid: {} to: {}", uuid.clone(), address.clone());
                     if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
                          std::fs::remove_dir_all(format!("/tmp/{}", uuid.clone())).expect("Failed to remove Directory");
@@ -263,13 +264,13 @@ async fn start_cast_handler(
                     while let Some(payload) = response.message().await.unwrap() {
                         if is_first_message && payload.payload_type == eval1(&DialogResponsePayloadType::DialogEnd) {
                             event_sender1.send(get_start_failed_event_command(uuid.clone().as_str(),
-                                                                              address.clone().as_str(),
+                                                                              address_clone.clone().as_str(),
                                                                               payload.data.as_str(),
                                                                               "client-failed"))
                                 .expect("Failed to send start client error");
                         } else if is_first_message {
                             event_sender1.send(get_start_success_event_command(uuid.clone().as_str(),
-                                                                               address.clone().as_str(),
+                                                                               address_clone.clone().as_str(),
                                                                                metadata.clone().as_str()))
                                 .expect("Failed to send start success event");
                         }
@@ -277,7 +278,7 @@ async fn start_cast_handler(
                         if payload.payload_type == eval1(&DialogResponsePayloadType::ResponseEnd) {
                             break;
                         }
-                        process_response_payload(uuid.clone().as_str(), address.clone().as_str(), &payload, event_sender1.clone());
+                        process_response_payload(uuid.clone().as_str(), address_clone.clone().as_str(), &payload, event_sender1.clone());
                     }
                 });
             }
