@@ -284,9 +284,9 @@ async fn start_cast_handler(
                 });
             }
             Err(e) => {
-                error!("Error connecting client {} , {}", address.clone(), e.message());
-                event_sender.send(get_start_failed_event_command(uuid.as_str(),
-                                                                 address.as_str(),
+                error!("Error connecting client {} , {}", address_clone.clone(), e.message());
+                event_sender.send(get_start_failed_event_command(uuid_clone.as_str(),
+                                                                 address_clone.as_str(),
                                                                  metadata.as_str(),
                                                                  "connection-failed"))
                     .expect("Failed to send start failed event");
