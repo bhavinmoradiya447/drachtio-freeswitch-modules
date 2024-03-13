@@ -238,15 +238,15 @@ async fn start_cast_handler(
             while let Ok(mut addr_payload) = receiver.recv().await {
                 let payload_type = addr_payload.payload.payload_type;
                 process_payload(&mut addr_payload.payload, mode.clone(), codec.clone());
-                if payload_type == eval(&DialogRequestPayloadType::AudioStart) && address != addr_payload.address {
+                if payload_type == eval(&DialogRequestPayloadType::AudioStart) && address.clone() != addr_payload.address {
                     continue;
                 }
                 yield addr_payload.payload;
                 if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
                     || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address == addr_payload.address) {
-                    info!("done streaming for uuid: {} to: {}", uuid, address);
+                    info!("done streaming for uuid: {} to: {}", uuid.clone(), address.clone());
                     if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
-                         std::fs::remove_dir_all(format!("/tmp/{}", uuid)).expect("Failed to remove Directory");
+                         std::fs::remove_dir_all(format!("/tmp/{}", uuid.clone())).expect("Failed to remove Directory");
                     }
                     break;
                 }
