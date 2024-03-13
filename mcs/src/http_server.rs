@@ -230,6 +230,7 @@ async fn start_cast_handler(
             tx
         }
     };
+    let metadata_clone = metadata.clone();
 
     let mut receiver = channel.subscribe();
     tokio::spawn(async move {
@@ -298,7 +299,7 @@ async fn start_cast_handler(
         request.uuid.clone(),
         DialogRequestPayloadType::AudioStart.into(),
         request.address.clone(),
-        metadata,
+        metadata_clone,
     )) {
         info!("failed to send to channel; error = {:?}", e);
         //return Err(warp::reject());
@@ -443,6 +444,7 @@ async fn stop_cast_handler(
                                                             request.metadata.unwrap_or("".to_string().clone()).as_str(),
                                                             "Channel-Not-Exist"))
                 .expect("Failed to send stop failure");
+            Ok(warp::reply::json(&"ok"))
         }
     };
     if let Err(e) = channel.send(AddressPayload::new(
