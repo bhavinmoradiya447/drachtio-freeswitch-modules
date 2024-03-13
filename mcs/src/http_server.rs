@@ -4,7 +4,6 @@ use std::io::Write;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::channel;
 
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::UnboundedSender;
@@ -194,7 +193,6 @@ async fn start_cast_handler(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let count = COUNTER.fetch_add(1, SeqCst);
     let uuid = request.uuid.clone();
-    let uuid_clone = uuid.clone();
     let address = request.address.clone();
     let codec = request.codec.unwrap_or("mulaw".to_string());
     let mode = request.mode.unwrap_or("combined".to_string());
@@ -433,6 +431,9 @@ async fn stop_cast_handler(
     channels: Arc<Mutex<UuidChannels>>,
     event_sender: UnboundedSender<String>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
+    let uuid = request.uuid;
+    let address = request.address;
+    let metadata = request.metadata.unwrap_or("".to_string());
     let channels = channels.lock().unwrap();
     let channel = match channels.uuid_sender_map.get(&request.uuid) {
         Some(channel) => Some(channel.clone()),
@@ -440,9 +441,9 @@ async fn stop_cast_handler(
             error!("channel not found for uuid: {}", request.uuid);
             // throw error if channel does not exist
             //return Err(warp::reject());
-            event_sender.send(get_stop_failed_event_command(request.uuid.as_str(),
-                                                            request.address.as_str(),
-                                                            request.metadata.unwrap_or("".to_string().clone()).as_str(),
+            event_sender.send(get_stop_failed_event_command(uuid.clone().as_str(),
+                                                            address.clone().as_str(),
+                                                            metadata.clone().as_str(),
                                                             "Channel-Not-Exist"))
                 .expect("Failed to send stop failure");
             None
@@ -450,24 +451,24 @@ async fn stop_cast_handler(
     };
     if channel.is_some() {
         if let Err(e) = channel.unwrap().send(AddressPayload::new(
-            request.uuid,
+            uuid.clone(),
             DialogRequestPayloadType::AudioStop.into(),
-            request.address,
-            request.metadata.unwrap_or("".to_string()),
+            address.clone(),
+            metadata.clone(),
         )) {
             info!("failed to send to channel; error = {:?}", e);
             //return Err(warp::reject());
-            event_sender.send(get_stop_failed_event_command(request.uuid.as_str(),
-                                                            request.address.as_str(),
-                                                            request.metadata.unwrap_or("".to_string().clone()).as_str(),
+            event_sender.send(get_stop_failed_event_command(uuid.clone().as_str(),
+                                                            address.clone().as_str(),
+                                                            metadata.clone().as_str(),
                                                             "Failed-to-send"))
                 .expect("Failed to send stop failure");
         }
         info!("returning ok");
-        event_sender.send(get_stop_success_event_command(request.uuid.as_str(),
-                                                         request.address.as_str(),
-                                                         request.metadata.unwrap_or("".to_string().clone()).as_str()))
-            .expect("Failed to send stop success");
+        event_sender.send(get_stop_success_event_command(uuid.clone().as_str(),
+                                                         address.clone().as_str(),
+                                                         metadata.clone().as_str())
+                              .expect("Failed to send stop success");
     }
     Ok(warp::reply::json(&"ok"))
 }
