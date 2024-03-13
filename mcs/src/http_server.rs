@@ -235,6 +235,7 @@ async fn start_cast_handler(
     tokio::spawn(async move {
         info!("init payload stream for uuid: {} to: {}", uuid, address);
         let address_clone = address.clone();
+        let uuid_clone = uuid.clone();
         let payload_stream = async_stream::stream! {
             while let Ok(mut addr_payload) = receiver.recv().await {
                 let payload_type = addr_payload.payload.payload_type;
@@ -263,30 +264,30 @@ async fn start_cast_handler(
                     let mut response = response.into_inner();
                     while let Some(payload) = response.message().await.unwrap() {
                         if is_first_message && payload.payload_type == eval1(&DialogResponsePayloadType::DialogEnd) {
-                            event_sender1.send(get_start_failed_event_command(uuid.clone().as_str(),
-                                                                              address_clone.clone().as_str(),
+                            event_sender1.send(get_start_failed_event_command(uuid_clone.as_str(),
+                                                                              address_clone.as_str(),
                                                                               payload.data.as_str(),
                                                                               "client-failed"))
                                 .expect("Failed to send start client error");
                         } else if is_first_message {
-                            event_sender1.send(get_start_success_event_command(uuid.clone().as_str(),
-                                                                               address_clone.clone().as_str(),
-                                                                               metadata.clone().as_str()))
+                            event_sender1.send(get_start_success_event_command(uuid_clone.as_str(),
+                                                                               address_clone.as_str(),
+                                                                               metadata.as_str()))
                                 .expect("Failed to send start success event");
                         }
                         is_first_message = false;
                         if payload.payload_type == eval1(&DialogResponsePayloadType::ResponseEnd) {
                             break;
                         }
-                        process_response_payload(uuid.clone().as_str(), address_clone.clone().as_str(), &payload, event_sender1.clone());
+                        process_response_payload(uuid_clone.as_str(), address_clone.as_str(), &payload, event_sender1.clone());
                     }
                 });
             }
             Err(e) => {
                 error!("Error connecting client {} , {}", address.clone(), e.message());
-                event_sender.send(get_start_failed_event_command(uuid.clone().as_str(),
-                                                                 address.clone().as_str(),
-                                                                 metadata.clone().as_str(),
+                event_sender.send(get_start_failed_event_command(uuid.as_str(),
+                                                                 address.as_str(),
+                                                                 metadata.as_str(),
                                                                  "connection-failed"))
                     .expect("Failed to send start failed event");
             }
@@ -437,8 +438,8 @@ async fn stop_cast_handler(
             error!("channel not found for uuid: {}", request.uuid);
             // throw error if channel does not exist
             //return Err(warp::reject());
-            event_sender.send(get_stop_failed_event_command(request.uuid.clone().as_str(),
-                                                            request.address.clone().as_str(),
+            event_sender.send(get_stop_failed_event_command(request.uuid.as_str(),
+                                                            request.address.as_str(),
                                                             request.metadata.unwrap_or("".to_string().clone()).as_str(),
                                                             "Channel-Not-Exist"))
                 .expect("Failed to send stop failure");
@@ -452,15 +453,15 @@ async fn stop_cast_handler(
     )) {
         info!("failed to send to channel; error = {:?}", e);
         //return Err(warp::reject());
-        event_sender.send(get_stop_failed_event_command(request.uuid.clone().as_str(),
-                                                        request.address.clone().as_str(),
+        event_sender.send(get_stop_failed_event_command(request.uuid.as_str(),
+                                                        request.address.as_str(),
                                                         request.metadata.unwrap_or("".to_string().clone()).as_str(),
                                                         "Failed-to-send"))
             .expect("Failed to send stop failure");
     }
     info!("returning ok");
-    event_sender.send(get_stop_success_event_command(request.uuid.clone().as_str(),
-                                                     request.address.clone().as_str(),
+    event_sender.send(get_stop_success_event_command(request.uuid.as_str(),
+                                                     request.address.as_str(),
                                                      request.metadata.unwrap_or("".to_string().clone()).as_str()))
         .expect("Failed to send stop success");
     Ok(warp::reply::json(&"ok"))
