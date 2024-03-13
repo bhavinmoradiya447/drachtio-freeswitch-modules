@@ -467,8 +467,8 @@ async fn stop_cast_handler(
         info!("returning ok");
         event_sender.send(get_stop_success_event_command(uuid.clone().as_str(),
                                                          address.clone().as_str(),
-                                                         metadata.clone().as_str())
-                              .expect("Failed to send stop success");
+                                                         metadata.clone().as_str()))
+            .expect("Failed to send stop success");
     }
     Ok(warp::reply::json(&"ok"))
 }
