@@ -128,3 +128,14 @@ send event to grpc client
   "duration_ms": "<total duration in Millisecond since recording start to stopped streaming>",
 }
 ```
+
+##### Freeswitch failure event
+**Name**: mod_audio_cast::failed
+**Description**: This will get generated for any failure on command execution.
+**Body**: JSON string
+```
+{
+  "Action": "start/stop/pause/resume/mask/unmask/send",
+  "Reason": "Media Server Error"
+}
+```

@@ -239,31 +239,31 @@ SWITCH_STANDARD_API(cast_function)
                 status = do_stop(lsession, bugname, argv[2] );
                  if (status != SWITCH_STATUS_SUCCESS) {
                      const char* address = cJSON_GetObjectCstr(cJSON_Parse(argv[2]), "address");
-                    responseHandler(lsession, EVENT_CAST_FAILED, 1, address, argv[2], "stop");
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, address, argv[2], argv[1]);
                  }
               }
             else if (!strcasecmp(argv[1], "pause")) {
                 status = do_pauseresume(lsession, bugname, 1);
                 if (status != SWITCH_STATUS_SUCCESS) {
-                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, "pause");
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, argv[1]);
                 }
             }
             else if (!strcasecmp(argv[1], "resume")) {
                 status = do_pauseresume(lsession, bugname, 0);
                 if (status != SWITCH_STATUS_SUCCESS) {
-                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, "pause");
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, argv[1]);
                 }
             }
             else if (!strcasecmp(argv[1], "mask")) {
                 status = do_maskunmask(lsession, bugname, 1);
                 if (status != SWITCH_STATUS_SUCCESS) {
-                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, "pause");
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, argv[1]);
                 }
             }
             else if (!strcasecmp(argv[1], "unmask")) {
                 status = do_maskunmask(lsession, bugname, 0);
                 if (status != SWITCH_STATUS_SUCCESS) {
-                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, "pause");
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, argv[1]);
                 }
             }
             else if (!strcasecmp(argv[1], "start")) {
@@ -274,13 +274,13 @@ SWITCH_STANDARD_API(cast_function)
                 status = start_capture(lsession, flags, sampling, bugname, argv[2]);
                 if (status != SWITCH_STATUS_SUCCESS) {
                      const char* address = cJSON_GetObjectCstr(cJSON_Parse(argv[2]), "address");
-                    responseHandler(lsession, EVENT_CAST_FAILED, 1, address, argv[2], "start");
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, address, argv[2], argv[1]);
                  }
             }
             else if (!strcasecmp(argv[1], "send")) {
                 status = do_send(lsession, bugname, argv[2]);
                 if (status != SWITCH_STATUS_SUCCESS) {
-                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, "send");
+                    responseHandler(lsession, EVENT_CAST_FAILED, 1, NULL, NULL, argv[1]);
                 }
             }
             else {
