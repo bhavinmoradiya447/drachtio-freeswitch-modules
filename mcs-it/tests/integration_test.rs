@@ -1,7 +1,8 @@
 use std::{path::PathBuf, process::Child};
 use std::io::{Read, Write};
-use std::net::{Shutdown, TcpListener};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::process::exit;
+use std::sync::mpsc::Sender;
 
 use reqwest::blocking;
 use serde_json::json;
@@ -23,8 +24,9 @@ fn test() {
     // wait for the mcs binary to start
     std::thread::sleep(std::time::Duration::from_secs(1));
 
+    let (tx, rx) = std::sync::mpsc::channel::<TcpStream>();
     let t0 = std::thread::spawn(|| {
-        start_tcp_server();
+        start_tcp_server(tx);
     });
 
     let t1 = std::thread::spawn(|| {
@@ -83,15 +85,15 @@ fn test() {
         // terminate the mcs and recorder binary
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
-        exit(0);
+        rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
     }
 }
 
-fn start_tcp_server() {
+fn start_tcp_server(tx: Sender<TcpStream>) {
     let listener = TcpListener::bind("127.0.0.1:8022").unwrap();
 
-
     let (mut socket, _) = listener.accept().unwrap();
+    tx.send(socket.try_clone().unwrap()).unwrap();
     socket.set_nodelay(true).unwrap();
     socket.write_all("Content-Type: auth/request".as_bytes()).unwrap();
     let mut buf = [0; 100];
