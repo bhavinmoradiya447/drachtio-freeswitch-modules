@@ -46,6 +46,7 @@ fn test() {
     t2.join().unwrap();
     t3.join().unwrap();
     t4.join().unwrap();
+    t0.join().unwrap();
 
     // terminate the mcs and recorder binary
     mcs_child.kill().expect("failed to terminate mcs");
@@ -66,7 +67,7 @@ fn start_tcp_server() {
         loop {
             let mut buf = [0; 1021];
             let size = socket.read(&mut buf).unwrap();
-            println!("Got Command  {}", String::from_utf8(buf[0..size].to_owned()).unwrap());
+            info!("Got Command  {}", String::from_utf8(buf[0..size].to_owned()).unwrap());
             socket.write_all("Content-Type: command/reply\nReply-Text: +OK accepted".as_bytes()).unwrap()
         }
     } else {
