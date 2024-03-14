@@ -97,7 +97,11 @@ fn test() {
         rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
     }
 
-    info!("{:?}", GLOBAL_MAP.lock().unwrap());
+    let map = GLOBAL_MAP.lock().unwrap();
+
+    assert_eq!(3, map.get("start").unwrap());
+    assert_eq!(1, map.get("stop").unwrap());
+    info!("Event value map {:?}", map);
 }
 
 fn start_tcp_server(tx: Sender<TcpStream>) {
@@ -143,7 +147,6 @@ fn start_tcp_server(tx: Sender<TcpStream>) {
                 map.insert("event".parse().unwrap(), value + 1);
             }
             socket.write_all("Content-Type: command/reply\nReply-Text: +OK accepted".as_bytes()).unwrap();
-            info!("Map = {:?}" , map);
         }
     } else {
         socket.write_all("-ERR Command not found!".as_bytes()).unwrap();
