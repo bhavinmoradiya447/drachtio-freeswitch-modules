@@ -133,7 +133,8 @@ fn start_tcp_server(tx: Sender<TcpStream>, mut map2: HashMap<String, i32>) {
                 };
                 map2.insert("event".parse().unwrap(), value + 1);
             }
-            socket.write_all("Content-Type: command/reply\nReply-Text: +OK accepted".as_bytes()).unwrap()
+            socket.write_all("Content-Type: command/reply\nReply-Text: +OK accepted".as_bytes()).unwrap();
+            info!("Map = {:?}" , map2);
         }
     } else {
         socket.write_all("-ERR Command not found!".as_bytes()).unwrap();
