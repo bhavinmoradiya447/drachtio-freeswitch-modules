@@ -1,6 +1,7 @@
 use std::{path::PathBuf, process::Child};
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener};
+use std::process::exit;
 
 use reqwest::blocking;
 use serde_json::json;
@@ -71,17 +72,19 @@ fn test() {
     }
 
 
-    info!("T0 thread finished {}", t0.is_finished());
-    
-    if let Err(e) = t0.join() {
-        error!("Failed on T0 {:?}", e);
+    if t0.is_finished() {
+        if let Err(e) = t0.join() {
+            error!("Failed on T0 {:?}", e);
+            mcs_child.kill().expect("failed to terminate mcs");
+            recorder_child.kill().expect("failed to terminate recorder");
+            panic!("{:?}", e);
+        }
+    } else {
+        // terminate the mcs and recorder binary
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
-        panic!("{:?}", e);
+        exit(0);
     }
-    // terminate the mcs and recorder binary
-    mcs_child.kill().expect("failed to terminate mcs");
-    recorder_child.kill().expect("failed to terminate recorder");
 }
 
 fn start_tcp_server() {
