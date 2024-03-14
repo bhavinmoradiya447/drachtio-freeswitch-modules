@@ -19,6 +19,7 @@ tokio = { version = "1.35.0", features = ["net", "full", "macros", "rt-multi-thr
 tonic = "0.10.2"
 warp = "0.3.6"
 uuid = "0.8"
+tokio-stream = { version = "0.1" }
 
 [build-dependencies]
 tonic-build = "0.10.2"

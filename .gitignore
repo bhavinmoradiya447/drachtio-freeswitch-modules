@@ -36,3 +36,5 @@ node_modules
 .vscode
 stubs/*
 mcs/target
+mcs-it/target
+recorder/target

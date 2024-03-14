@@ -1,26 +1,29 @@
-
-use std::{io::Write, fs::File, collections::HashMap};
-use tonic::{Request, Response, Status, transport::Server, Streaming};
+use std::{collections::HashMap, fs::File, io::Write};
 use tokio;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::{transport::Server, Request, Response, Status, Streaming};
 
 pub mod mcs {
     tonic::include_proto!("mcs");
 }
 
-use crate::mcs::multi_cast_service_server::MultiCastServiceServer;
-use crate::mcs::multi_cast_service_server::MultiCastService;
-use crate::mcs::Payload;
-use crate::mcs::PayloadType;
-use crate::mcs::ListenerResponse;
+use crate::mcs::media_cast_service_server::MediaCastService;
+use crate::mcs::media_cast_service_server::MediaCastServiceServer;
+use crate::mcs::DialogRequestPayload;
+use crate::mcs::DialogRequestPayloadType;
+use crate::mcs::DialogResponsePayload;
+use crate::mcs::DialogResponsePayloadType;
 
-pub struct MultiCastServiceImpl {}
+pub struct MediaCastServiceImpl {}
 
 #[tonic::async_trait]
-impl MultiCastService for MultiCastServiceImpl {
-    async fn listen(
+impl MediaCastService for MediaCastServiceImpl {
+    type DialogStream = ReceiverStream<Result<DialogResponsePayload, Status>>;
+
+    async fn dialog(
         &self,
-        request: Request<Streaming<Payload>>,
-    ) -> Result<Response<ListenerResponse>, Status> {
+        request: Request<Streaming<DialogRequestPayload>>,
+    ) -> Result<Response<Self::DialogStream>, Status> {
         let mut stream = request.into_inner();
 
         // create a map of uuid to file
@@ -39,8 +42,10 @@ impl MultiCastService for MultiCastServiceImpl {
                     // create file
                     println!("[info] opening file: /tmp/rec-{}.raw", payload.uuid);
                     let mut file = File::create(format!("/tmp/rec-{}.raw", payload.uuid)).unwrap();
-                    let mut left_file = File::create(format!("/tmp/rec-{}-left.raw", payload.uuid)).unwrap();
-                    let mut right_file = File::create(format!("/tmp/rec-{}-right.raw", payload.uuid)).unwrap();
+                    let mut left_file =
+                        File::create(format!("/tmp/rec-{}-left.raw", payload.uuid)).unwrap();
+                    let mut right_file =
+                        File::create(format!("/tmp/rec-{}-right.raw", payload.uuid)).unwrap();
                     file.write_all(payload.audio.as_slice()).unwrap();
                     left_file.write_all(&payload.audio_left).unwrap();
                     right_file.write_all(&payload.audio_right).unwrap();
@@ -48,7 +53,11 @@ impl MultiCastService for MultiCastServiceImpl {
                     left_files.insert(payload.uuid.clone(), left_file);
                     right_files.insert(payload.uuid, right_file);
                 } else {
-                    if payload.payload_type == <PayloadType as Into<i32>>::into(PayloadType::AudioStop) {
+                    if payload.payload_type
+                        == <DialogRequestPayloadType as Into<i32>>::into(
+                            DialogRequestPayloadType::AudioStop,
+                        )
+                    {
                         // close file
                         println!("[info] closing file: /tmp/rec-{}.raw", payload.uuid);
                         let mut file = files.remove(&payload.uuid).unwrap();
@@ -68,14 +77,23 @@ impl MultiCastService for MultiCastServiceImpl {
                         right_file.write_all(&payload.audio_right).unwrap();
                     }
                 }
-
             }
         });
 
-        let response = ListenerResponse {
-            ok: true,
-        };
-        Ok(Response::new(response))
+        // create a receiver stream to return
+        let (tx, rx) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(async move {
+            let response = DialogResponsePayload {
+                payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                    DialogResponsePayloadType::ResponseEnd,
+                ),
+                audio: Vec::new(),
+                data: String::from("recording started"),
+            };
+            tx.send(Ok(response)).await.unwrap();
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
 }
 
@@ -83,7 +101,7 @@ impl MultiCastService for MultiCastServiceImpl {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting recorder service...");
     Server::builder()
-        .add_service(MultiCastServiceServer::new(MultiCastServiceImpl {}))
+        .add_service(MediaCastServiceServer::new(MediaCastServiceImpl {}))
         .serve("0.0.0.0:50051".parse().unwrap())
         .await?;
     Ok(())
