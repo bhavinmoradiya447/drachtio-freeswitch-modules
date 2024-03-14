@@ -1,4 +1,5 @@
 use std::{path::PathBuf, process::Child};
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::mpsc::Sender;
@@ -24,8 +25,10 @@ fn test() {
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     let (tx, rx) = std::sync::mpsc::channel::<TcpStream>();
+    let map = HashMap::<String, i32>::new();
+    let map2 = map.clone();
     let t0 = std::thread::spawn(|| {
-        start_tcp_server(tx);
+        start_tcp_server(tx, map2);
     });
 
     let t1 = std::thread::spawn(|| {
@@ -86,9 +89,10 @@ fn test() {
         recorder_child.kill().expect("failed to terminate recorder");
         rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
     }
+    info!("{:?}", map);
 }
 
-fn start_tcp_server(tx: Sender<TcpStream>) {
+fn start_tcp_server(tx: Sender<TcpStream>, mut map2: HashMap<String, i32>) {
     let listener = TcpListener::bind("127.0.0.1:8022").unwrap();
 
     let (mut socket, _) = listener.accept().unwrap();
@@ -102,7 +106,33 @@ fn start_tcp_server(tx: Sender<TcpStream>) {
         loop {
             let mut buf = [0; 1021];
             let size = socket.read(&mut buf).unwrap();
-            info!("Got Command  {}", String::from_utf8(buf[0..size].to_owned()).unwrap());
+            let event = String::from_utf8(buf[0..size].to_owned()).unwrap();
+            info!("Got Command  {}", &event);
+            if event.contains("mod_audio_cast::mcs::start") {
+                let value = match map2.remove("start") {
+                    Some(v) => v,
+                    _ => 0
+                };
+                map2.insert("start".parse().unwrap(), value + 1);
+            } else if event.contains("mod_audio_cast::mcs::stop") {
+                let value = match map2.remove("stop") {
+                    Some(v) => v,
+                    _ => 0
+                };
+                map2.insert("stop".parse().unwrap(), value + 1);
+            } else if event.contains("mod_audio_cast::mcs::failed") {
+                let value = match map2.remove("failed") {
+                    Some(v) => v,
+                    _ => 0
+                };
+                map2.insert("failed".parse().unwrap(), value + 1);
+            } else if event.contains("mod_audio_cast::mcs::event") {
+                let value = match map2.remove("event") {
+                    Some(v) => v,
+                    _ => 0
+                };
+                map2.insert("event".parse().unwrap(), value + 1);
+            }
             socket.write_all("Content-Type: command/reply\nReply-Text: +OK accepted".as_bytes()).unwrap()
         }
     } else {
