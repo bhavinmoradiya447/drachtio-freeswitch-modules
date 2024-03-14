@@ -54,6 +54,14 @@ fn test() {
         test_mulaw_segment();
     });
 
+    let t5 = std::thread::spawn(|| {
+        test_start_fail();
+    });
+
+    let t6 = std::thread::spawn(|| {
+        test_stop_fail();
+    });
+
 
     if let Err(e) = t1.join() {
         error!("Failed on T1 {:?}", e);
@@ -82,6 +90,19 @@ fn test() {
         panic!("{:?}", e);
     }
 
+    if let Err(e) = t5.join() {
+        error!("Failed on T4 {:?}", e);
+        mcs_child.kill().expect("failed to terminate mcs");
+        recorder_child.kill().expect("failed to terminate recorder");
+        panic!("{:?}", e);
+    }
+
+    if let Err(e) = t6.join() {
+        error!("Failed on T4 {:?}", e);
+        mcs_child.kill().expect("failed to terminate mcs");
+        recorder_child.kill().expect("failed to terminate recorder");
+        panic!("{:?}", e);
+    }
 
     if t0.is_finished() {
         if let Err(e) = t0.join() {
@@ -103,6 +124,7 @@ fn test() {
     assert_eq!(&1, map.get("stop").unwrap());
     info!("Event value map {:?}", map);
 }
+
 
 fn start_tcp_server(tx: Sender<TcpStream>) {
     let listener = TcpListener::bind("127.0.0.1:8022").unwrap();
@@ -192,6 +214,22 @@ fn test_mulaw_segment() {
     info!("mulaw-segment test passed");
 }
 
+fn test_start_fail() {
+    info!("testing split-mulaw");
+    let uuid = uuid::Uuid::new_v4();
+    start_cast_failure(uuid, "split".to_string());
+    stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
+    validate_split_output(uuid);
+    cleanup(uuid);
+}
+
+fn test_stop_fail() {
+    info!("testing split-mulaw");
+    let uuid = uuid::Uuid::new_v4();
+    stop_cast_failure(uuid);
+    cleanup(uuid);
+}
+
 fn run_bin(cmd: String) -> Child {
     info!("running cmd: {:?}", cmd);
     let mut dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
@@ -241,6 +279,25 @@ fn start_cast(uuid: Uuid, mode: String) {
     assert!(response.status().is_success());
 }
 
+fn start_cast_failure(uuid: Uuid, mode: String) {
+    // send start_cast request
+    let url = "http://127.0.0.1:3030/start_cast";
+    let body = json!({
+        "uuid": uuid.to_string(),
+        "address": "http://127.0.0.1:50054/",
+        "mode": mode,
+        "codec": "mulaw",
+        "metadata": "test-metadata",
+    });
+
+    let client = reqwest::blocking::Client::new();
+    let response = client.post(url).json(&body).send().unwrap();
+
+    info!("start_cast response status: {:?}", response.status());
+    // Check the response status
+    assert!(response.status().is_success());
+}
+
 fn dispatch_event(uuid: Uuid, event: String) {
     // send dispatch_event request
     let url = "http://127.0.0.1:3030/dispatch_event";
@@ -258,6 +315,23 @@ fn dispatch_event(uuid: Uuid, event: String) {
 }
 
 fn stop_cast(uuid: Uuid) {
+    // send stop_cast request
+    let url = "http://127.0.0.1:3030/stop_cast";
+    let body = json!({
+        "uuid": uuid.to_string(),
+        "address": "http://127.0.0.1:50051/",
+        "metadata": "test-metadata",
+    });
+
+    let client = reqwest::blocking::Client::new();
+    let response = client.post(url).json(&body).send().unwrap();
+
+    info!("stop_cast response status: {:?}", response.status());
+    // Check the response status
+    assert!(response.status().is_success());
+}
+
+fn stop_cast_failure(uuid: Uuid) {
     // send stop_cast request
     let url = "http://127.0.0.1:3030/stop_cast";
     let body = json!({
