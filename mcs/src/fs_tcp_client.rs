@@ -117,7 +117,7 @@ async fn process_command(mut command_client: StubbornIo<CommandClient, String>, 
         match command_client.write(format!("{}\n\n", msg).as_bytes()).await {
             Ok(size) => {
                 info!("Sent command with size {}", size);
-                let mut buf = [0; 100];
+                let mut buf = [0; 256];
                 let size = command_client.read(&mut buf).await.unwrap();
                 info!("Got response {:?}", String::from_utf8(buf[0..size].to_owned()).unwrap())
             }
