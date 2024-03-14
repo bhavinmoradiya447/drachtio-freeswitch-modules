@@ -218,16 +218,12 @@ fn test_start_fail() {
     info!("testing split-mulaw");
     let uuid = uuid::Uuid::new_v4();
     start_cast_failure(uuid, "split".to_string());
-    stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
-    validate_split_output(uuid);
-    cleanup(uuid);
 }
 
 fn test_stop_fail() {
     info!("testing split-mulaw");
     let uuid = uuid::Uuid::new_v4();
     stop_cast_failure(uuid);
-    cleanup(uuid);
 }
 
 fn run_bin(cmd: String) -> Child {
