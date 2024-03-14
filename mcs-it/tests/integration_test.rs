@@ -46,30 +46,30 @@ fn test() {
     if let Err(e) = t1.join() {
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
-        panic!(format!("{:?}", e));
+        panic!("{:?}", e);
     }
     if let Err(e) = t2.join() {
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
-        panic!(format!("{:?}", e));
+        panic!("{:?}", e);
     }
 
     if let Err(e) = t3.join() {
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
-        panic!(format!("{:?}", e));
+        panic!("{:?}", e);
     }
 
     if let Err(e) = t4.join() {
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
-        panic!(format!("{:?}", e));
+        panic!("{:?}", e);
     }
 
     if let Err(e) = t0.join() {
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
-        panic!(format!("{:?}", e));
+        panic!("{:?}", e);
     }
     // terminate the mcs and recorder binary
     mcs_child.kill().expect("failed to terminate mcs");
