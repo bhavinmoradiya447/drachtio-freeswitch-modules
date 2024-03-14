@@ -1,7 +1,6 @@
 use std::{path::PathBuf, process::Child};
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
-use std::process::exit;
 use std::sync::mpsc::Sender;
 
 use reqwest::blocking;
