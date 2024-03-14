@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::mpsc::Sender;
+use std::sync::Mutex;
+use lazy_static::lazy_static;
 
 use reqwest::blocking;
 use serde_json::json;
@@ -13,6 +15,13 @@ const SLEEP_DURATION_MILLIS: u64 = 20;
 const SLEEP_DURATION_SECS: u64 = 1;
 const CHUNK_SIZE: usize = 640;
 
+lazy_static! {
+
+static ref GLOBAL_MAP: Mutex<HashMap<String, i32>> = {
+
+Mutex::new(HashMap::new())};
+
+}
 #[test]
 fn test() {
     // init tracing
@@ -25,10 +34,8 @@ fn test() {
     std::thread::sleep(std::time::Duration::from_secs(1));
 
     let (tx, rx) = std::sync::mpsc::channel::<TcpStream>();
-    let map = HashMap::<String, i32>::new();
-    let map2 = map.clone();
     let t0 = std::thread::spawn(|| {
-        start_tcp_server(tx, map2);
+        start_tcp_server(tx);
     });
 
     let t1 = std::thread::spawn(|| {
@@ -89,10 +96,11 @@ fn test() {
         recorder_child.kill().expect("failed to terminate recorder");
         rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
     }
-    info!("{:?}", map);
+
+    info!("{:?}", GLOBAL_MAP.lock().unwrap());
 }
 
-fn start_tcp_server(tx: Sender<TcpStream>, mut map2: HashMap<String, i32>) {
+fn start_tcp_server(tx: Sender<TcpStream>) {
     let listener = TcpListener::bind("127.0.0.1:8022").unwrap();
 
     let (mut socket, _) = listener.accept().unwrap();
@@ -108,33 +116,34 @@ fn start_tcp_server(tx: Sender<TcpStream>, mut map2: HashMap<String, i32>) {
             let size = socket.read(&mut buf).unwrap();
             let event = String::from_utf8(buf[0..size].to_owned()).unwrap();
             info!("Got Command  {}", &event);
+            let mut map = GLOBAL_MAP.lock().unwrap();
             if event.contains("mod_audio_cast::mcs::start") {
-                let value = match map2.remove("start") {
+                let value = match map.remove("start") {
                     Some(v) => v,
                     _ => 0
                 };
-                map2.insert("start".parse().unwrap(), value + 1);
+                map.insert("start".parse().unwrap(), value + 1);
             } else if event.contains("mod_audio_cast::mcs::stop") {
-                let value = match map2.remove("stop") {
+                let value = match map.remove("stop") {
                     Some(v) => v,
                     _ => 0
                 };
-                map2.insert("stop".parse().unwrap(), value + 1);
+                map.insert("stop".parse().unwrap(), value + 1);
             } else if event.contains("mod_audio_cast::mcs::failed") {
-                let value = match map2.remove("failed") {
+                let value = match map.remove("failed") {
                     Some(v) => v,
                     _ => 0
                 };
-                map2.insert("failed".parse().unwrap(), value + 1);
+                map.insert("failed".parse().unwrap(), value + 1);
             } else if event.contains("mod_audio_cast::mcs::event") {
-                let value = match map2.remove("event") {
+                let value = match map.remove("event") {
                     Some(v) => v,
                     _ => 0
                 };
-                map2.insert("event".parse().unwrap(), value + 1);
+                map.insert("event".parse().unwrap(), value + 1);
             }
             socket.write_all("Content-Type: command/reply\nReply-Text: +OK accepted".as_bytes()).unwrap();
-            info!("Map = {:?}" , map2);
+            info!("Map = {:?}" , map);
         }
     } else {
         socket.write_all("-ERR Command not found!".as_bytes()).unwrap();
