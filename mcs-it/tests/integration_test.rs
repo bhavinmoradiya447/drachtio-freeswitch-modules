@@ -122,6 +122,7 @@ fn test() {
 
     assert_eq!(&3, map.get("start").unwrap());
     assert_eq!(&1, map.get("stop").unwrap());
+    assert_eq!(&2, map.get("failed").unwrap());
     info!("Event value map {:?}", map);
 }
 
