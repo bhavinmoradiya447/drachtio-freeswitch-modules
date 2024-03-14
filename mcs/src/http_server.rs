@@ -250,7 +250,7 @@ async fn start_cast_handler(
                     info!("done streaming for uuid: {} to: {}", uuid.clone(), address.clone());
                     if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
                         let file_path = format!("/tmp/{}", uuid.clone());
-                        if(Path::new(file_path.as_str()).exists()) {
+                        if Path::new(file_path.as_str()).exists() {
                          std::fs::remove_dir_all(file_path).expect("Failed to remove Directory");
                         }
                     }
