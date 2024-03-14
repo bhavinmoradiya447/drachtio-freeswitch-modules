@@ -488,7 +488,7 @@ mod tests {
     fn test_handle_split() {
         let audio = vec![1, 2, 3, 4, 5, 6, 7, 8];
         let (left, right) = handle_split(&audio, "split-pcm16".to_string());
-        assert_eq!(left, vec![1, 2]);
-        assert_eq!(right, vec![3, 4]);
+        assert_eq!(left, vec![1, 2, 5, 6]);
+        assert_eq!(right, vec![3, 4, 7, 8]);
     }
 }
