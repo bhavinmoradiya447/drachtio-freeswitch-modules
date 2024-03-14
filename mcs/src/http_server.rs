@@ -18,6 +18,7 @@ use warp::{
     path::{FullPath, Tail},
     Filter, Rejection, Reply,
 };
+use std::path::Path;
 
 pub mod mcs {
     tonic::include_proto!("mcs");
@@ -248,7 +249,10 @@ async fn start_cast_handler(
                     || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address.clone() == addr_payload.address) {
                     info!("done streaming for uuid: {} to: {}", uuid.clone(), address.clone());
                     if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
-                         std::fs::remove_dir_all(format!("/tmp/{}", uuid.clone())).expect("Failed to remove Directory");
+                        let file_path = format!("/tmp/{}", uuid.clone());
+                        if(Path::new(file_path.clone()).exists()) {
+                         std::fs::remove_dir_all(file_path).expect("Failed to remove Directory");
+                        }
                     }
                     break;
                 }
