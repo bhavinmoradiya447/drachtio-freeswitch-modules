@@ -27,6 +27,7 @@ impl<A> UnderlyingIo<A> for CommandClient
 
             match connect_result {
                 Ok(mut stream) => {
+                    stream.set_nodelay(true).unwrap();
                     let mut buf = [0; 128];
                     let auth_command = format!("auth {}\n\n", CONFIG.fs_esl_client.auth.clone());
                     let size = stream.read(&mut buf).await.unwrap();
@@ -35,8 +36,8 @@ impl<A> UnderlyingIo<A> for CommandClient
                             match str.as_str().contains("Content-Type: auth/request") {
                                 true => {
                                     stream.write(auth_command.as_bytes()).await.unwrap();
-                                    stream.read(&mut buf).await.unwrap();
-                                    match String::from_utf8(Vec::from(buf)) {
+                                    let size = stream.read(&mut buf).await.unwrap();
+                                    match String::from_utf8(buf[0..size].to_owned()) {
                                         Ok(str) => {
                                             match str.as_str().contains("Reply-Text: +OK accepted") {
                                                 true => {

@@ -1,4 +1,6 @@
 use std::{path::PathBuf, process::Child};
+use std::io::{Read, Write};
+use std::net::{Shutdown, TcpListener};
 
 use reqwest::blocking;
 use serde_json::json;
@@ -19,6 +21,10 @@ fn test() {
 
     // wait for the mcs binary to start
     std::thread::sleep(std::time::Duration::from_secs(1));
+
+    let t0 = std::thread::spawn(|| {
+        start_tcp_server();
+    });
 
     let t1 = std::thread::spawn(|| {
         test_ping();
@@ -44,6 +50,30 @@ fn test() {
     // terminate the mcs and recorder binary
     mcs_child.kill().expect("failed to terminate mcs");
     recorder_child.kill().expect("failed to terminate recorder");
+}
+
+fn start_tcp_server() {
+    let listener = TcpListener::bind("127.0.0.1:8022").unwrap();
+
+
+    let (mut socket, _) = listener.accept().unwrap();
+    socket.set_nodelay(true).unwrap();
+    socket.write_all("Content-Type: auth/request".as_bytes()).unwrap();
+    let mut buf = [0; 100];
+    let size = socket.read(&mut buf).unwrap();
+    if String::from_utf8(buf[0..size].to_owned()).unwrap().contains("auth Lcqzoc4e!zk3C3!#") {
+        socket.write_all("Reply-Text: +OK accepted".as_bytes()).unwrap();
+        loop {
+            let mut buf = [0; 1021];
+            let size = socket.read(&mut buf).unwrap();
+            println!("Got Command  {}", String::from_utf8(buf[0..size].to_owned()).unwrap());
+            socket.write_all("Content-Type: command/reply\nReply-Text: +OK accepted".as_bytes()).unwrap()
+        }
+    } else {
+        socket.write_all("-ERR Command not found!".as_bytes()).unwrap();
+        assert!(false, "Unauthorized");
+        socket.shutdown(Shutdown::Both).unwrap();
+    }
 }
 
 fn test_ping() {
