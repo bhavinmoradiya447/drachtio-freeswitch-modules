@@ -99,8 +99,8 @@ fn test() {
 
     let map = GLOBAL_MAP.lock().unwrap();
 
-    assert_eq!(3, map.get("start").unwrap());
-    assert_eq!(1, map.get("stop").unwrap());
+    assert_eq!(&3, map.get("start").unwrap());
+    assert_eq!(&1, map.get("stop").unwrap());
     info!("Event value map {:?}", map);
 }
 
