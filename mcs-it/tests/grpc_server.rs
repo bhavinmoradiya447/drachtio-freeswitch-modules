@@ -28,7 +28,7 @@ impl MediaCastService for MediaCastServiceImpl {
         &self,
         request: Request<Streaming<DialogRequestPayload>>,
     ) -> Result<Response<Self::DialogStream>, Status> {
-        info!("GOt EVENT ==================================================");
+        info!("=========================== GOT CONNECTION =====================");
         let mut stream = request.into_inner();
 
         // create a receiver stream to return

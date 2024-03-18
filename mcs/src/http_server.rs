@@ -185,7 +185,7 @@ struct StartCastRequest {
 }
 
 #[utoipa::path(post, path = "/start_cast", request_body = StartCastRequest)]
-#[instrument(name = "start_cast", skip(channels, address_client))]
+//#[instrument(name = "start_cast", skip(channels, address_client))]
 async fn start_cast_handler(
     // body: HashMap<String, String>,
     request: StartCastRequest,
@@ -272,6 +272,7 @@ async fn start_cast_handler(
         let event_sender1 = event_sender.clone();
         match client.dialog(request).await {
             Ok(response) => {
+                info!("GOT RESPONSE FROM SERVER");
                 tokio::spawn(async move {
                     let mut is_first_message = true;
 
@@ -298,6 +299,7 @@ async fn start_cast_handler(
                 });
             }
             Err(e) => {
+                info!("GOT ERROR FROM SERVER");
                 error!("Error connecting client {} , {}", address_clone.clone(), e.message());
                 event_sender.send(get_start_failed_event_command(uuid_clone.as_str(),
                                                                  address_clone.as_str(),
@@ -378,7 +380,7 @@ fn eval1(payload_type: &DialogResponsePayloadType) -> i32 {
     *payload_type as i32
 }
 
-#[instrument(name = "handle_split", skip(audio, codec))]
+//#[instrument(name = "handle_split", skip(audio, codec))]
 fn handle_split(audio: &Vec<u8>, codec: String) -> (Vec<u8>, Vec<u8>) {
     let split_size = audio.len() / 2;
     let mut left = Vec::with_capacity(split_size as usize);
@@ -408,7 +410,7 @@ struct DispatchEventRequest {
 }
 
 #[utoipa::path(post, path = "/dispatch_event", request_body = DispatchEventRequest)]
-#[instrument(name = "dispatch_event", skip(channels))]
+//#[instrument(name = "dispatch_event", skip(channels))]
 async fn dispatch_event_handler(
     request: DispatchEventRequest,
     channels: Arc<Mutex<UuidChannels>>,
@@ -443,7 +445,7 @@ struct StopCastRequest {
 }
 
 #[utoipa::path(post, path = "/stop_cast", request_body = StopCastRequest)]
-#[instrument(name = "stop_cast", skip(channels))]
+//#[instrument(name = "stop_cast", skip(channels))]
 async fn stop_cast_handler(
     request: StopCastRequest,
     channels: Arc<Mutex<UuidChannels>>,
@@ -492,7 +494,7 @@ async fn stop_cast_handler(
 }
 
 #[utoipa::path(get, path = "/ping")]
-#[instrument(name = "ping")]
+//#[instrument(name = "ping")]
 pub async fn ping_handler() -> Result<impl warp::Reply, warp::Rejection> {
     Ok(warp::reply::json(&"pong"))
 }
