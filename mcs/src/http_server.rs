@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::UnboundedSender;
 use tonic::service::interceptor::InterceptedService;
-use tonic::transport::{Channel, ClientTlsConfig, Uri};
+use tonic::transport::{Certificate, Channel, ClientTlsConfig, Uri};
 use tonic::Status;
 use tracing::{error, info, instrument};
 use utoipa::{OpenApi, ToSchema};
@@ -210,7 +210,7 @@ async fn start_cast_handler(
                 "creating client for address: {} in group: {}",
                 address, group
             );
-            let pem = std::fs::read_to_string("/etc/ssl/certs/SecureTrust_CA.pem")?;
+            let pem = std::fs::read_to_string("/etc/ssl/certs/SecureTrust_CA.pem").unwrap();
             let ca = Certificate::from_pem(pem);
 
             let tls = ClientTlsConfig::new()
