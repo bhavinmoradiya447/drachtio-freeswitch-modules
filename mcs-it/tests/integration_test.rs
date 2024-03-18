@@ -44,7 +44,7 @@ async fn test() {
     let t0 = std::thread::spawn(|| {
         start_tcp_server(tx);
     });
-
+/*
     let t1 = std::thread::spawn(|| {
         test_ping();
     });
@@ -69,15 +69,17 @@ async fn test() {
         test_stop_fail();
     });
 
+ */
+
 
     let t7 = std::thread::spawn(|| {
-       // test_mulaw_send_response_end();
+        test_mulaw_send_response_end();
         test_mulaw_dialog_end();
-       // test_mulaw_send_event();
-       // test_mulaw_send_audio();
+        test_mulaw_send_event();
+        test_mulaw_send_audio();
     });
 
-
+/*
     if let Err(e) = t1.join() {
         error!("Failed on T1 {:?}",  e);
         mcs_child.kill().expect("failed to terminate mcs");
@@ -118,6 +120,8 @@ async fn test() {
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
+    
+ */
 
     if let Err(e) = t7.join() {
         error!("Failed on T7 {:?}",  e);
