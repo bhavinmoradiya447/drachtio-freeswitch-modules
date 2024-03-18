@@ -210,7 +210,12 @@ async fn start_cast_handler(
                 "creating client for address: {} in group: {}",
                 address, group
             );
-            let grpc_channel = Channel::builder(address_uri).tls_config(ClientTlsConfig::new()).unwrap().connect_lazy();
+            let pem = std::fs::read_to_string("/etc/ssl/certs/SecureTrust_CA.pem"))?;
+            let ca = Certificate::from_pem(pem);
+
+            let tls = ClientTlsConfig::new()
+                .ca_certificate(ca);
+            let grpc_channel = Channel::builder(address_uri).tls_config(tls).unwrap().connect_lazy();
             let grpc_client = MediaCastServiceClient::with_interceptor(
                 grpc_channel, TokenInterceptor);
             address_client
