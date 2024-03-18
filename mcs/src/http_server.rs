@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::UnboundedSender;
 use tonic::service::interceptor::InterceptedService;
-use tonic::transport::{Channel, Uri};
+use tonic::transport::{Channel, ClientTlsConfig, Uri};
 use tonic::Status;
 use tracing::{error, info, instrument};
 use utoipa::{OpenApi, ToSchema};
@@ -210,7 +210,7 @@ async fn start_cast_handler(
                 "creating client for address: {} in group: {}",
                 address, group
             );
-            let grpc_channel = Channel::builder(address_uri).connect_lazy();
+            let grpc_channel = Channel::builder(address_uri).tls_config(ClientTlsConfig::new()).connect_lazy();
             let grpc_client = MediaCastServiceClient::with_interceptor(
                 grpc_channel, TokenInterceptor);
             address_client
