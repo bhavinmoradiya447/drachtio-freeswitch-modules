@@ -38,3 +38,7 @@ stubs/*
 mcs/target
 mcs-it/target
 recorder/target
+recorder/.idea
+mcs/.idea
+mcs-it/.idea
+

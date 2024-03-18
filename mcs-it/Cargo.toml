@@ -7,14 +7,30 @@ edition = "2021"
 lazy_static = "1.4.0"
 log = "0.4.21"
 
+async-stream = "0.3.5"
+# blockingqueue = "0.1.1"
+futures-util = { version = "0.3.29", features = ["sink"] }
+http = "1.0.0"
+# openssl = "0.10.61"
+prost = "0.12.3"
+# sha1_smol = "1.0.0"
+tokio = { version = "1.35.0", features = ["net", "full", "macros", "rt-multi-thread"] }
+# tokio-native-tls = "0.3.1"
+# tokio-websockets = { version = "0.5.0", features = ["server", "native-tls", "openssl"] }
+tonic = "0.10.2"
+warp = "0.3.6"
+uuid = "0.8"
+tokio-stream = { version = "0.1" }
+
 [dev-dependencies]
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 chrono = "0.4.34"
-uuid = { version = "1.0.7", features = ["v4"] }
-tokio = { version = "1.35.0", features = ["net", "fs", "full"] }
 serde_json = "1.0.113"
 
 # for tracing
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 tracing-futures = "0.2.5"
+
+[build-dependencies]
+tonic-build = "0.10.2"
