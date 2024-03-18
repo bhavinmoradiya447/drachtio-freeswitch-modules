@@ -210,12 +210,16 @@ async fn start_cast_handler(
                 "creating client for address: {} in group: {}",
                 address, group
             );
-            let pem = std::fs::read_to_string("/etc/ssl/certs/IdenTrust_Commercial_Root_CA_1.pem").unwrap();
-            let ca = Certificate::from_pem(pem);
+            let grpc_channel = if Path::new(CONFIG.http_server.tls_cert_file.as_str()).exists() {
+                let pem = std::fs::read_to_string(CONFIG.http_server.tls_cert_file.as_str()).unwrap();
+                let ca = Certificate::from_pem(pem);
 
-            let tls = ClientTlsConfig::new()
-                .ca_certificate(ca);
-            let grpc_channel = Channel::builder(address_uri).tls_config(tls).unwrap().connect_lazy();
+                let tls = ClientTlsConfig::new()
+                    .ca_certificate(ca);
+                Channel::builder(address_uri).tls_config(tls).unwrap().connect_lazy()
+            } else {
+                Channel::builder(address_uri).connect_lazy()
+            };
             let grpc_client = MediaCastServiceClient::with_interceptor(
                 grpc_channel, TokenInterceptor);
             address_client
@@ -276,7 +280,7 @@ async fn start_cast_handler(
                             event_sender1.send(get_start_failed_event_command(uuid_clone.as_str(),
                                                                               address_clone.as_str(),
                                                                               payload.data.as_str(),
-                                                                              "client-failed"))
+                                                                              "subscriber-error"))
                                 .expect("Failed to send start client error");
                         } else if is_first_message {
                             event_sender1.send(get_start_success_event_command(uuid_clone.as_str(),
@@ -324,7 +328,7 @@ fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponseP
     // log error on failure
 
     if payload.payload_type == eval1(&DialogResponsePayloadType::Event) {
-        event_sender.send(get_event_command(uuid, address, "Client-Event", payload.data.as_str()))
+        event_sender.send(get_event_command(uuid, address, "subscriber-event", payload.data.as_str()))
             .expect("Failed to send client event");
     } else if payload.payload_type == eval1(&DialogResponsePayloadType::AudioChunk) ||
         payload.payload_type == eval1(&DialogResponsePayloadType::EndOfAudio) {
@@ -345,7 +349,7 @@ fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponseP
                 error!("failed to flush file; error = {:?}", e);
             }
             let payload = format!("{{\"file_path\":\"{}\"}}", file_path);
-            event_sender.send(get_event_command(uuid, address, "Client-Playback", payload.as_str()))
+            event_sender.send(get_event_command(uuid, address, "subscriber-playback", payload.as_str()))
                 .expect("Failed to send client event");
         }
     }
@@ -453,7 +457,7 @@ async fn stop_cast_handler(
             event_sender.send(get_stop_failed_event_command(uuid.clone().as_str(),
                                                             address.clone().as_str(),
                                                             metadata.clone().as_str(),
-                                                            "Channel-Not-Exist"))
+                                                            "channel-not-exist"))
                 .expect("Failed to send stop failure");
             None
         }
@@ -470,7 +474,7 @@ async fn stop_cast_handler(
             event_sender.send(get_stop_failed_event_command(uuid.clone().as_str(),
                                                             address.clone().as_str(),
                                                             metadata.clone().as_str(),
-                                                            "Failed-to-send"))
+                                                            "failed-to-send"))
                 .expect("Failed to send stop failure");
         }
         info!("returning ok");

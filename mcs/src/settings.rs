@@ -23,6 +23,7 @@ pub struct HttpServer {
     pub url: String,
     pub token_file: String,
     pub grpc_connection_pool: usize,
+    pub tls_cert_file: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]

@@ -268,7 +268,7 @@ fn start_cast(uuid: Uuid, mode: String) {
     let url = "http://127.0.0.1:3030/start_cast";
     let body = json!({
         "uuid": uuid.to_string(),
-        "address": "https://mcc.intg-us1.rtmslab.net/",
+        "address": "http://127.0.0.1:50051/",
         "mode": mode,
         "codec": "mulaw",
         "metadata": "test-metadata",
