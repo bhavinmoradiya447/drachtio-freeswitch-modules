@@ -109,7 +109,7 @@ impl MediaCastService for MediaCastServiceImpl {
             match group {
                 0 => tx.send(Ok(response_group1)).await.unwrap(),
                 1 => tx.send(Ok(response_group2)).await.unwrap(),
-                3 => {
+                2 => {
                     let response_group3 = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                             DialogResponsePayloadType::Event,
@@ -119,7 +119,7 @@ impl MediaCastService for MediaCastServiceImpl {
                     };
                     tx.send(Ok(response_group3)).await.unwrap()
                 }
-                4 => {
+                3 => {
                     let vec: Vec<u8> = vec![250; 320];
                     let response_1 = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
