@@ -1,14 +1,21 @@
 use std::{collections::HashMap, fs::File, io::Write};
 use log::info;
+use serde_json::to_string;
 use tokio;
+use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
+use uuid::Uuid;
 use mcs::{DialogRequestPayload, DialogRequestPayloadType, DialogResponsePayload, DialogResponsePayloadType};
 use mcs::media_cast_service_server::{MediaCastService, MediaCastServiceServer};
 
 pub mod mcs {
     tonic::include_proto!("mcs");
 }
+
+static UUID_FAILED_DIALOG: Uuid = Uuid::new_v4();
+static UUID_FAILED_SEND_EVENT: Uuid = Uuid::new_v4();
+static UUID_FAILED_SEND_AUDIO: Uuid = Uuid::new_v4();
 
 pub struct MediaCastServiceImpl {}
 
@@ -27,75 +34,99 @@ impl MediaCastService for MediaCastServiceImpl {
         let mut left_files = HashMap::new();
         let mut right_files = HashMap::new();
 
+        // create a receiver stream to return
+        let (tx, rx) = tokio::sync::mpsc::channel(4);
+
+
         tokio::spawn(async move {
             while let Some(payload) = stream.message().await.unwrap() {
-                // println!("[debug] seq: {}, size: {}", payload.seq, payload.size);
-                // if uuid does not exist in map create file
-                if payload.event_data.len() > 0 {
-                    println!("[info] got event data: {}", payload.event_data);
-                }
-                if !files.contains_key(&payload.uuid) {
-                    // create file
-                    println!("[info] opening file: /tmp/rec-{}.raw", payload.uuid);
-                    let mut file = File::create(format!("/tmp/rec-{}.raw", payload.uuid)).unwrap();
-                    let mut left_file =
-                        File::create(format!("/tmp/rec-{}-left.raw", payload.uuid)).unwrap();
-                    let mut right_file =
-                        File::create(format!("/tmp/rec-{}-right.raw", payload.uuid)).unwrap();
-                    file.write_all(payload.audio.as_slice()).unwrap();
-                    left_file.write_all(&payload.audio_left).unwrap();
-                    right_file.write_all(&payload.audio_right).unwrap();
-                    files.insert(payload.uuid.clone(), file);
-                    left_files.insert(payload.uuid.clone(), left_file);
-                    right_files.insert(payload.uuid, right_file);
-                } else {
-                    if payload.payload_type
-                        == <DialogRequestPayloadType as Into<i32>>::into(
-                        DialogRequestPayloadType::AudioStop,
-                    )
-                    {
-                        // close file
-                        println!("[info] closing file: /tmp/rec-{}.raw", payload.uuid);
-                        let mut file = files.remove(&payload.uuid).unwrap();
-                        file.flush().unwrap();
-                        let mut left_file = left_files.remove(&payload.uuid).unwrap();
-                        left_file.flush().unwrap();
-                        let mut right_file = right_files.remove(&payload.uuid).unwrap();
-                        right_file.flush().unwrap();
-                    } else {
-                        // append audio to file
-                        // println!("[trace] writing seq: {}, size: {} to file: /tmp/rec-{}.raw", payload.seq, payload.audio.len(), payload.uuid);
-                        let mut file = files.get(&payload.uuid).unwrap();
-                        file.write_all(payload.audio.as_slice()).unwrap();
-                        let mut left_file = left_files.get(&payload.uuid).unwrap();
-                        left_file.write_all(&payload.audio_left).unwrap();
-                        let mut right_file = right_files.get(&payload.uuid).unwrap();
-                        right_file.write_all(&payload.audio_right).unwrap();
+                if payload.payload_type == <DialogRequestPayloadType as Into<i32>>::into(
+                    DialogRequestPayloadType::AudioStart,
+                ) {
+                    Self::send_response(tx.clone(), &payload);
+                } else if payload.payload_type == <DialogRequestPayloadType as Into<i32>>::into(
+                    DialogRequestPayloadType::EventData,
+                ) {
+                    if payload.event_data.len() > 0 {
+                        println!("[info] got event data: {}", payload.event_data);
+                        let response = DialogResponsePayload {
+                            payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                                DialogResponsePayloadType::Event,
+                            ),
+                            audio: Vec::new(),
+                            data: payload.event_data,
+                        };
+                        tx.send(Ok(response)).await.unwrap();
                     }
                 }
             }
-        });
-
-        // create a receiver stream to return
-        let (tx, rx) = tokio::sync::mpsc::channel(4);
-        tokio::spawn(async move {
-            let response = DialogResponsePayload {
-                payload_type: <DialogResponsePayloadType as Into<i32>>::into(
-                    DialogResponsePayloadType::ResponseEnd,
-                ),
-                audio: Vec::new(),
-                data: String::from("recording started"),
-            };
-            tx.send(Ok(response)).await.unwrap();
         });
 
         Ok(Response::new(ReceiverStream::new(rx)))
     }
 }
 
+impl MediaCastServiceImpl {
+    fn send_response(tx: Sender<Result<DialogResponsePayload, Status>>, payload: &DialogRequestPayload) {
+        if let Ok(uuid) = Uuid::parse_str(payload.uuid.as_str()) {
+            tokio::spawn(async move {
+                if uuid.eq(&UUID_FAILED_DIALOG) {
+                    let response = DialogResponsePayload {
+                        payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                            DialogResponsePayloadType::DialogEnd,
+                        ),
+                        audio: Vec::new(),
+                        data: String::from("Failed to connect upstream"),
+                    };
+                    tx.send(Ok(response)).await.unwrap();
+                } else if uuid.eq(&UUID_FAILED_SEND_EVENT) {
+                    let response = DialogResponsePayload {
+                        payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                            DialogResponsePayloadType::Event,
+                        ),
+                        audio: Vec::new(),
+                        data: String::from("{\"Connection\":\"Success\"}"),
+                    };
+                    tx.send(Ok(response)).await.unwrap();
+                } else if uuid.eq(&UUID_FAILED_SEND_EVENT) {
+                    let response = DialogResponsePayload {
+                        payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                            DialogResponsePayloadType::AudioChunk,
+                        ),
+                        audio: vec![255; 320],
+                        data: String::from("test_audio"),
+                    };
+                    tx.send(Ok(response.clone())).await.unwrap();
+                    tx.send(Ok(response.clone())).await.unwrap();
+                    tx.send(Ok(response.clone())).await.unwrap();
+                    tx.send(Ok(response.clone())).await.unwrap();
+                    tx.send(Ok(response.clone())).await.unwrap();
+                    let response_end = DialogResponsePayload {
+                        payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                            DialogResponsePayloadType::ResponseEnd,
+                        ),
+                        audio: vec![255; 320],
+                        data: String::from("test_audio"),
+                    };
+                    tx.send(Ok(response_end)).await.unwrap();
+                } else {
+                    let response = DialogResponsePayload {
+                        payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                            DialogResponsePayloadType::ResponseEnd,
+                        ),
+                        audio: Vec::new(),
+                        data: String::from("Success"),
+                    };
+                    tx.send(Ok(response)).await.unwrap();
+                }
+            });
+        }
+    }
+}
+
 
 pub async fn start_grpc_server() -> Result<(), Box<dyn std::error::Error>> {
-    info!("####################### Starting test grpc server ###############");
+    info!("####################### Starting test grpc server ###################");
     Server::builder()
         .add_service(MediaCastServiceServer::new(MediaCastServiceImpl {}))
         .serve("0.0.0.0:50052".parse().unwrap())
