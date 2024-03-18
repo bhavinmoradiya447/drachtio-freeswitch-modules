@@ -1,4 +1,5 @@
 use std::{collections::HashMap, fs::File, io::Write};
+use log::info;
 use tokio;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
@@ -94,7 +95,7 @@ impl MediaCastService for MediaCastServiceImpl {
 
 
 pub async fn start_grpc_server() -> Result<(), Box<dyn std::error::Error>> {
-    println!("Starting test grpc server...");
+    info!("####################### Starting test grpc server ###############");
     Server::builder()
         .add_service(MediaCastServiceServer::new(MediaCastServiceImpl {}))
         .serve("0.0.0.0:50052".parse().unwrap())
