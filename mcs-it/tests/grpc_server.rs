@@ -44,7 +44,7 @@ impl MediaCastService for MediaCastServiceImpl {
                     DialogRequestPayloadType::EventData,
                 ) {
                     if payload.event_data.len() > 0 {
-                        println!("[info] got event data: {}", payload.event_data);
+                        info!("grpc_server -- got event data: {}", payload.event_data);
                         let response = DialogResponsePayload {
                             payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                                 DialogResponsePayloadType::Event,
