@@ -85,7 +85,7 @@ impl MediaCastServiceImpl {
                         data: String::from("{\"Connection\":\"Success\"}"),
                     };
                     tx.send(Ok(response)).await.unwrap();
-                } else if uuid.to_string().as_str().eq(UUID_SEND_EVENT) {
+                } else if uuid.to_string().as_str().eq(UUID_SEND_AUDIO) {
                     let response = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                             DialogResponsePayloadType::AudioChunk,

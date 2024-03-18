@@ -145,9 +145,10 @@ async fn test() {
 
     let map = GLOBAL_MAP.lock().unwrap();
     info!("Event value map {:?}", map);
-    assert_eq!(&3, map.get("start").unwrap());
+    assert_eq!(&6, map.get("start").unwrap());
     assert_eq!(&1, map.get("stop").unwrap());
-    assert_eq!(&2, map.get("failed").unwrap());
+    assert_eq!(&3, map.get("failed").unwrap());
+    assert_eq!(&3, map.get("event").unwrap());
 
 }
 
