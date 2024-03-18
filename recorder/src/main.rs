@@ -1,4 +1,6 @@
-use std::{collections::HashMap, fs::File, io::Write};
+use std::{collections::HashMap, fs::File, io::Write, iter};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering::SeqCst;
 use tokio;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
@@ -16,6 +18,8 @@ use crate::mcs::DialogResponsePayloadType;
 
 pub struct MediaCastServiceImpl {}
 
+static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 #[tonic::async_trait]
 impl MediaCastService for MediaCastServiceImpl {
     type DialogStream = ReceiverStream<Result<DialogResponsePayload, Status>>;
@@ -24,6 +28,8 @@ impl MediaCastService for MediaCastServiceImpl {
         &self,
         request: Request<Streaming<DialogRequestPayload>>,
     ) -> Result<Response<Self::DialogStream>, Status> {
+        let count = COUNTER.fetch_add(1, SeqCst);
+        let group = count % 4;
         let mut stream = request.into_inner();
 
         // create a map of uuid to file
@@ -55,8 +61,8 @@ impl MediaCastService for MediaCastServiceImpl {
                 } else {
                     if payload.payload_type
                         == <DialogRequestPayloadType as Into<i32>>::into(
-                            DialogRequestPayloadType::AudioStop,
-                        )
+                        DialogRequestPayloadType::AudioStop,
+                    )
                     {
                         // close file
                         println!("[info] closing file: /tmp/rec-{}.raw", payload.uuid);
@@ -83,14 +89,82 @@ impl MediaCastService for MediaCastServiceImpl {
         // create a receiver stream to return
         let (tx, rx) = tokio::sync::mpsc::channel(4);
         tokio::spawn(async move {
-            let response = DialogResponsePayload {
+            let response_group1 = DialogResponsePayload {
                 payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                     DialogResponsePayloadType::ResponseEnd,
                 ),
                 audio: Vec::new(),
                 data: String::from("recording started"),
             };
-            tx.send(Ok(response)).await.unwrap();
+
+            let response_group2 = DialogResponsePayload {
+                payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                    DialogResponsePayloadType::DialogEnd,
+                ),
+                audio: Vec::new(),
+                data: String::from("{\"cause\" : \"Failed to connect to upstream\"}"),
+            };
+
+
+            match group {
+                0 => tx.send(Ok(response_group1)).await.unwrap(),
+                1 => tx.send(Ok(response_group2)).await.unwrap(),
+                3 => {
+                    let response_group3 = DialogResponsePayload {
+                        payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                            DialogResponsePayloadType::Event,
+                        ),
+                        audio: Vec::new(),
+                        data: String::from("{\"tts\" : \"This is bot\"}"),
+                    };
+                    tx.send(Ok(response_group3)).await.unwrap()
+                }
+                4 => {
+                    let vec: Vec<u8> = vec![250; 320];
+                    let response_1 = DialogResponsePayload {
+                        payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                            DialogResponsePayloadType::AudioChunk,
+                        ),
+                        audio: vec.clone(),
+                        data: String::from("audio_file"),
+                    };
+                    let response_2 = DialogResponsePayload {
+                        payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                            DialogResponsePayloadType::AudioChunk,
+                        ),
+                        audio: vec.clone(),
+                        data: String::from("audio_file"),
+                    };
+                    let response_3 = DialogResponsePayload {
+                        payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                            DialogResponsePayloadType::AudioChunk,
+                        ),
+                        audio: vec.clone(),
+                        data: String::from("audio_file"),
+                    };
+                    let response_4 = DialogResponsePayload {
+                        payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                            DialogResponsePayloadType::AudioChunk,
+                        ),
+                        audio: vec.clone(),
+                        data: String::from("audio_file"),
+                    };
+                    let response_5 = DialogResponsePayload {
+                        payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                            DialogResponsePayloadType::EndOfAudio,
+                        ),
+                        audio: vec.clone(),
+                        data: String::from("audio_file"),
+                    };
+
+                    tx.send(Ok(response_1)).await.unwrap();
+                    tx.send(Ok(response_2)).await.unwrap();
+                    tx.send(Ok(response_3)).await.unwrap();
+                    tx.send(Ok(response_4)).await.unwrap();
+                    tx.send(Ok(response_5)).await.unwrap()
+                }
+                _ => {}
+            }
         });
 
         Ok(Response::new(ReceiverStream::new(rx)))
