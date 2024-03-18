@@ -210,7 +210,7 @@ async fn start_cast_handler(
                 "creating client for address: {} in group: {}",
                 address, group
             );
-            let grpc_channel = Channel::builder(address_uri).tls_config(ClientTlsConfig::new()).connect_lazy();
+            let grpc_channel = Channel::builder(address_uri).tls_config(ClientTlsConfig::new()).unwrap().connect_lazy();
             let grpc_client = MediaCastServiceClient::with_interceptor(
                 grpc_channel, TokenInterceptor);
             address_client
