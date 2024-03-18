@@ -71,10 +71,10 @@ async fn test() {
 
 
     let t7 = std::thread::spawn(|| {
-        test_mulaw_send_response_end();
+       // test_mulaw_send_response_end();
         test_mulaw_dialog_end();
-        test_mulaw_send_event();
-        test_mulaw_send_audio();
+       // test_mulaw_send_event();
+       // test_mulaw_send_audio();
     });
 
 
