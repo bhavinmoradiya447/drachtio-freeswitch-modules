@@ -79,48 +79,48 @@ async fn test() {
 
 
     if let Err(e) = t1.join() {
-        error!("Failed on T1 {:?}",  e.try_into());
+        error!("Failed on T1 {:?}",  e);
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
     if let Err(e) = t2.join() {
-        error!("Failed on T2 {:?}",  e.try_into());
+        error!("Failed on T2 {:?}",  e);
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
     if let Err(e) = t3.join() {
-        error!("Failed on T3 {:?}",  e.try_into());
+        error!("Failed on T3 {:?}",  e);
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
     if let Err(e) = t4.join() {
-        error!("Failed on T4 {:?}",  e.try_into());
+        error!("Failed on T4 {:?}",  e);
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
     if let Err(e) = t5.join() {
-        error!("Failed on T5 {:?}",  e.try_into());
+        error!("Failed on T5 {:?}",  e);
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
     if let Err(e) = t6.join() {
-        error!("Failed on T6 {:?}",  e.try_into());
+        error!("Failed on T6 {:?}",  e);
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
     if let Err(e) = t7.join() {
-        error!("Failed on T7 {:?}",  e.try_into());
+        error!("Failed on T7 {:?}",  e);
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
@@ -128,7 +128,7 @@ async fn test() {
 
     if t0.is_finished() {
         if let Err(e) = t0.join() {
-            error!("Failed on T0 {:?}", e.try_into());
+            error!("Failed on T0 {:?}", e);
             mcs_child.kill().expect("failed to terminate mcs");
             recorder_child.kill().expect("failed to terminate recorder");
             panic!("{:?}", e);
