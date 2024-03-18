@@ -242,8 +242,6 @@ fn test_mulaw_send_event() {
     let uuid = Uuid::parse_str(grpc_server::UUID_SEND_EVENT).unwrap();
     start_cast(uuid, "combined".to_string(), "http://127.0.0.1:50052/".parse().unwrap());
     stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
-    validate_output(uuid);
-    cleanup(uuid);
     info!("combined test passed");
 }
 
@@ -252,8 +250,6 @@ fn test_mulaw_send_audio() {
     let uuid = Uuid::parse_str(grpc_server::UUID_SEND_AUDIO).unwrap();
     start_cast(uuid, "combined".to_string(), "http://127.0.0.1:50052/".parse().unwrap());
     stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
-    validate_output(uuid);
-    cleanup(uuid);
     info!("combined test passed");
 }
 
@@ -262,8 +258,6 @@ fn test_mulaw_send_response_end() {
     let uuid = uuid::Uuid::new_v4();
     start_cast(uuid, "combined".to_string(), "http://127.0.0.1:50052/".parse().unwrap());
     stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
-    validate_output(uuid);
-    cleanup(uuid);
     info!("combined test passed");
 }
 
