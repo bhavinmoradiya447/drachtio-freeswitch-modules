@@ -23,9 +23,9 @@ static ref GLOBAL_MAP: Mutex<HashMap<String, i32>> = {
 Mutex::new(HashMap::new())};
 
 }
-#[test]
+//#[test]
 #[tokio::test]
-fn test() {
+async fn test() {
     // init tracing
     tracing_subscriber::fmt::init();
 
