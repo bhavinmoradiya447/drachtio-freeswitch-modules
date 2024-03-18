@@ -210,7 +210,7 @@ async fn start_cast_handler(
                 "creating client for address: {} in group: {}",
                 address, group
             );
-            let pem = std::fs::read_to_string("/etc/ssl/certs/SecureTrust_CA.pem"))?;
+            let pem = std::fs::read_to_string("/etc/ssl/certs/SecureTrust_CA.pem")?;
             let ca = Certificate::from_pem(pem);
 
             let tls = ClientTlsConfig::new()
