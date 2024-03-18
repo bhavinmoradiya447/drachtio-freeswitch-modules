@@ -24,7 +24,6 @@ static ref GLOBAL_MAP: Mutex<HashMap<String, i32>> = {
 Mutex::new(HashMap::new())};
 
 }
-//#[test]
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn test() {
     // init tracing
@@ -44,7 +43,7 @@ async fn test() {
     let t0 = std::thread::spawn(|| {
         start_tcp_server(tx);
     });
-/*
+
     let t1 = std::thread::spawn(|| {
         test_ping();
     });
@@ -69,7 +68,7 @@ async fn test() {
         test_stop_fail();
     });
 
- */
+
 
 
     let t7 = std::thread::spawn(|| {
@@ -79,7 +78,7 @@ async fn test() {
         test_mulaw_send_audio();
     });
 
-/*
+
     if let Err(e) = t1.join() {
         error!("Failed on T1 {:?}",  e);
         mcs_child.kill().expect("failed to terminate mcs");
@@ -121,7 +120,7 @@ async fn test() {
         panic!("{:?}", e);
     }
 
- */
+
 
     if let Err(e) = t7.join() {
         error!("Failed on T7 {:?}",  e);
@@ -145,11 +144,11 @@ async fn test() {
     }
 
     let map = GLOBAL_MAP.lock().unwrap();
-
+    info!("Event value map {:?}", map);
     assert_eq!(&3, map.get("start").unwrap());
     assert_eq!(&1, map.get("stop").unwrap());
     assert_eq!(&2, map.get("failed").unwrap());
-    info!("Event value map {:?}", map);
+
 }
 
 
