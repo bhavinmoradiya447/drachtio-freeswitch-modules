@@ -25,7 +25,7 @@ Mutex::new(HashMap::new())};
 
 }
 //#[test]
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn test() {
     // init tracing
     tracing_subscriber::fmt::init();
@@ -120,7 +120,7 @@ async fn test() {
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
-    
+
  */
 
     if let Err(e) = t7.join() {
