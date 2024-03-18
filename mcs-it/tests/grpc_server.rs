@@ -2,13 +2,12 @@ use std::{collections::HashMap, fs::File, io::Write};
 use tokio;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
-use crate::grpc_server::mcs::{DialogRequestPayload, DialogRequestPayloadType, DialogResponsePayload, DialogResponsePayloadType};
-use crate::grpc_server::mcs::media_cast_service_server::{MediaCastService, MediaCastServiceServer};
+use mcs::{DialogRequestPayload, DialogRequestPayloadType, DialogResponsePayload, DialogResponsePayloadType};
+use mcs::media_cast_service_server::{MediaCastService, MediaCastServiceServer};
 
 pub mod mcs {
     tonic::include_proto!("mcs");
 }
-
 
 pub struct MediaCastServiceImpl {}
 
