@@ -265,10 +265,10 @@ fn run_bin(cmd: String) -> Child {
 
 fn start_cast(uuid: Uuid, mode: String) {
     // send start_cast request
-    let url = "https://mcc.intg-us1.rtmslab.net/";
+    let url = "http://127.0.0.1:3030/start_cast";
     let body = json!({
         "uuid": uuid.to_string(),
-        "address": "http://127.0.0.1:50051/",
+        "address": "https://mcc.intg-us1.rtmslab.net/",
         "mode": mode,
         "codec": "mulaw",
         "metadata": "test-metadata",
