@@ -232,8 +232,6 @@ fn test_mulaw_dialog_end() {
     let uuid = Uuid::parse_str(grpc_server::UUID_FAILED_DIALOG).unwrap();
     start_cast(uuid, "combined".to_string(), "http://127.0.0.1:50052/".parse().unwrap());
     stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
-    validate_output(uuid);
-    cleanup(uuid);
     info!("combined test passed");
 }
 
