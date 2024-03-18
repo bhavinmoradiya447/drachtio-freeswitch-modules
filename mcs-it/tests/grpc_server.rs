@@ -29,11 +29,6 @@ impl MediaCastService for MediaCastServiceImpl {
     ) -> Result<Response<Self::DialogStream>, Status> {
         let mut stream = request.into_inner();
 
-        // create a map of uuid to file
-        let mut files = HashMap::new();
-        let mut left_files = HashMap::new();
-        let mut right_files = HashMap::new();
-
         // create a receiver stream to return
         let (tx, rx) = tokio::sync::mpsc::channel(4);
 
