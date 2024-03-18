@@ -12,6 +12,7 @@ use tracing::{error, info};
 use uuid::Uuid;
 
 mod grpc_server;
+
 const SLEEP_DURATION_MILLIS: u64 = 20;
 const SLEEP_DURATION_SECS: u64 = 1;
 const CHUNK_SIZE: usize = 640;
@@ -69,42 +70,57 @@ async fn test() {
     });
 
 
+    let t7 = std::thread::spawn(|| {
+        test_mulaw_send_response_end();
+        test_mulaw_dialog_end();
+        test_mulaw_send_event();
+        test_mulaw_send_audio();
+    });
+
+
     if let Err(e) = t1.join() {
-        error!("Failed on T1 {:?}", e);
+        error!("Failed on T1 {:?}",  e.try_into());
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
     if let Err(e) = t2.join() {
-        error!("Failed on T2 {:?}", e);
+        error!("Failed on T2 {:?}",  e.try_into());
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
     if let Err(e) = t3.join() {
-        error!("Failed on T3 {:?}", e);
+        error!("Failed on T3 {:?}",  e.try_into());
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
     if let Err(e) = t4.join() {
-        error!("Failed on T4 {:?}", e);
+        error!("Failed on T4 {:?}",  e.try_into());
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
     if let Err(e) = t5.join() {
-        error!("Failed on T4 {:?}", e);
+        error!("Failed on T5 {:?}",  e.try_into());
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
     if let Err(e) = t6.join() {
-        error!("Failed on T4 {:?}", e);
+        error!("Failed on T6 {:?}",  e.try_into());
+        mcs_child.kill().expect("failed to terminate mcs");
+        recorder_child.kill().expect("failed to terminate recorder");
+        panic!("{:?}", e);
+    }
+
+    if let Err(e) = t7.join() {
+        error!("Failed on T7 {:?}",  e.try_into());
         mcs_child.kill().expect("failed to terminate mcs");
         recorder_child.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
@@ -112,7 +128,7 @@ async fn test() {
 
     if t0.is_finished() {
         if let Err(e) = t0.join() {
-            error!("Failed on T0 {:?}", e);
+            error!("Failed on T0 {:?}", e.try_into());
             mcs_child.kill().expect("failed to terminate mcs");
             recorder_child.kill().expect("failed to terminate recorder");
             panic!("{:?}", e);
@@ -194,7 +210,7 @@ fn test_ping() {
 fn test_split_mulaw() {
     info!("testing split-mulaw");
     let uuid = uuid::Uuid::new_v4();
-    start_cast(uuid, "split".to_string());
+    start_cast(uuid, "split".to_string(), "http://127.0.0.1:50051/".parse().unwrap());
     stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
     validate_split_output(uuid);
     cleanup(uuid);
@@ -204,7 +220,47 @@ fn test_split_mulaw() {
 fn test_mulaw() {
     info!("testing combined");
     let uuid = uuid::Uuid::new_v4();
-    start_cast(uuid, "combined".to_string());
+    start_cast(uuid, "combined".to_string(), "http://127.0.0.1:50051/".parse().unwrap());
+    stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
+    validate_output(uuid);
+    cleanup(uuid);
+    info!("combined test passed");
+}
+
+fn test_mulaw_dialog_end() {
+    info!("testing combined");
+    let uuid = Uuid::parse_str(grpc_server::UUID_FAILED_DIALOG).unwrap();
+    start_cast(uuid, "combined".to_string(), "http://127.0.0.1:50052/".parse().unwrap());
+    stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
+    validate_output(uuid);
+    cleanup(uuid);
+    info!("combined test passed");
+}
+
+fn test_mulaw_send_event() {
+    info!("testing combined");
+    let uuid = Uuid::parse_str(grpc_server::UUID_SEND_EVENT).unwrap();
+    start_cast(uuid, "combined".to_string(), "http://127.0.0.1:50052/".parse().unwrap());
+    stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
+    validate_output(uuid);
+    cleanup(uuid);
+    info!("combined test passed");
+}
+
+fn test_mulaw_send_audio() {
+    info!("testing combined");
+    let uuid = Uuid::parse_str(grpc_server::UUID_SEND_AUDIO).unwrap();
+    start_cast(uuid, "combined".to_string(), "http://127.0.0.1:50052/".parse().unwrap());
+    stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
+    validate_output(uuid);
+    cleanup(uuid);
+    info!("combined test passed");
+}
+
+fn test_mulaw_send_response_end() {
+    info!("testing combined");
+    let uuid = uuid::Uuid::new_v4();
+    start_cast(uuid, "combined".to_string(), "http://127.0.0.1:50052/".parse().unwrap());
     stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
     validate_output(uuid);
     cleanup(uuid);
@@ -214,7 +270,7 @@ fn test_mulaw() {
 fn test_mulaw_segment() {
     info!("testing mulaw-segment");
     let uuid = uuid::Uuid::new_v4();
-    start_cast(uuid, "segment".to_string());
+    start_cast(uuid, "segment".to_string(), "http://127.0.0.1:50051/".parse().unwrap());
     stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), true);
     validate_segement(uuid);
     cleanup(uuid);
@@ -263,12 +319,12 @@ fn run_bin(cmd: String) -> Child {
     child
 }
 
-fn start_cast(uuid: Uuid, mode: String) {
+fn start_cast(uuid: Uuid, mode: String, grpc_address: String) {
     // send start_cast request
     let url = "http://127.0.0.1:3030/start_cast";
     let body = json!({
         "uuid": uuid.to_string(),
-        "address": "https://mcc.intg-us1.rtmslab.net",
+        "address": grpc_address,
         "mode": mode,
         "codec": "mulaw",
         "metadata": "test-metadata",

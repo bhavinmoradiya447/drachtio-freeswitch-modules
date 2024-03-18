@@ -14,9 +14,9 @@ pub mod mcs {
     tonic::include_proto!("mcs");
 }
 
-static UUID_FAILED_DIALOG: &str = "";
-static UUID_FAILED_SEND_EVENT: &str = "";
-static UUID_FAILED_SEND_AUDIO: &str = "";
+pub static UUID_FAILED_DIALOG: &str = "8b7afb6c-dbfc-478a-a773-ccad30b2b37e";
+pub static UUID_SEND_EVENT: &str = "d8b005c8-082e-4f19-a2a1-423719037c1a";
+pub static UUID_SEND_AUDIO: &str = "d7a61810-cc43-4617-a592-67892415b634";
 
 pub struct MediaCastServiceImpl {}
 
@@ -75,7 +75,7 @@ impl MediaCastServiceImpl {
                         data: String::from("Failed to connect upstream"),
                     };
                     tx.send(Ok(response)).await.unwrap();
-                } else if uuid.to_string().as_str().eq(UUID_FAILED_SEND_EVENT) {
+                } else if uuid.to_string().as_str().eq(UUID_SEND_EVENT) {
                     let response = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                             DialogResponsePayloadType::Event,
@@ -84,7 +84,7 @@ impl MediaCastServiceImpl {
                         data: String::from("{\"Connection\":\"Success\"}"),
                     };
                     tx.send(Ok(response)).await.unwrap();
-                } else if uuid.to_string().as_str().eq(UUID_FAILED_SEND_EVENT) {
+                } else if uuid.to_string().as_str().eq(UUID_SEND_EVENT) {
                     let response = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                             DialogResponsePayloadType::AudioChunk,
