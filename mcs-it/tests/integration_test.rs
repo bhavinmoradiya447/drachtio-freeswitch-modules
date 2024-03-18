@@ -228,7 +228,7 @@ fn test_mulaw() {
 }
 
 fn test_mulaw_dialog_end() {
-    info!("testing combined");
+    info!("testing dialog end");
     let uuid = Uuid::parse_str(grpc_server::UUID_FAILED_DIALOG).unwrap();
     start_cast(uuid, "combined".to_string(), "http://127.0.0.1:50052/".parse().unwrap());
     stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
@@ -236,7 +236,7 @@ fn test_mulaw_dialog_end() {
 }
 
 fn test_mulaw_send_event() {
-    info!("testing combined");
+    info!("testing send event");
     let uuid = Uuid::parse_str(grpc_server::UUID_SEND_EVENT).unwrap();
     start_cast(uuid, "combined".to_string(), "http://127.0.0.1:50052/".parse().unwrap());
     stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
@@ -244,7 +244,7 @@ fn test_mulaw_send_event() {
 }
 
 fn test_mulaw_send_audio() {
-    info!("testing combined");
+    info!("testing send audio");
     let uuid = Uuid::parse_str(grpc_server::UUID_SEND_AUDIO).unwrap();
     start_cast(uuid, "combined".to_string(), "http://127.0.0.1:50052/".parse().unwrap());
     stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
@@ -252,7 +252,7 @@ fn test_mulaw_send_audio() {
 }
 
 fn test_mulaw_send_response_end() {
-    info!("testing combined");
+    info!("testing response end");
     let uuid = uuid::Uuid::new_v4();
     start_cast(uuid, "combined".to_string(), "http://127.0.0.1:50052/".parse().unwrap());
     stream_audio(uuid, "./resources/test-input-mulaw.raw".to_string(), false);
