@@ -75,7 +75,7 @@ impl MediaCastServiceImpl {
                         data: String::from("Failed to connect upstream"),
                     };
                     tx.send(Ok(response)).await.unwrap();
-                } else if uuid.to_string().as_str().eq(&UUID_FAILED_SEND_EVENT) {
+                } else if uuid.to_string().as_str().eq(UUID_FAILED_SEND_EVENT) {
                     let response = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                             DialogResponsePayloadType::Event,
@@ -84,7 +84,7 @@ impl MediaCastServiceImpl {
                         data: String::from("{\"Connection\":\"Success\"}"),
                     };
                     tx.send(Ok(response)).await.unwrap();
-                } else if uuid.to_string().as_str().eq(&UUID_FAILED_SEND_EVENT) {
+                } else if uuid.to_string().as_str().eq(UUID_FAILED_SEND_EVENT) {
                     let response = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                             DialogResponsePayloadType::AudioChunk,
