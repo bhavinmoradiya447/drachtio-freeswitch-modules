@@ -1,4 +1,5 @@
 use std::{collections::HashMap, fs::File, io::Write};
+use std::string::ToString;
 use log::info;
 use serde_json::to_string;
 use tokio;
@@ -13,9 +14,9 @@ pub mod mcs {
     tonic::include_proto!("mcs");
 }
 
-static UUID_FAILED_DIALOG: Uuid = Uuid::new_v4();
-static UUID_FAILED_SEND_EVENT: Uuid = Uuid::new_v4();
-static UUID_FAILED_SEND_AUDIO: Uuid = Uuid::new_v4();
+static UUID_FAILED_DIALOG: String = "".to_string();
+static UUID_FAILED_SEND_EVENT: String = "".to_string();
+static UUID_FAILED_SEND_AUDIO: String = "".to_string();
 
 pub struct MediaCastServiceImpl {}
 
@@ -65,7 +66,7 @@ impl MediaCastServiceImpl {
     fn send_response(tx: Sender<Result<DialogResponsePayload, Status>>, payload: &DialogRequestPayload) {
         if let Ok(uuid) = Uuid::parse_str(payload.uuid.as_str()) {
             tokio::spawn(async move {
-                if uuid.eq(&UUID_FAILED_DIALOG) {
+                if uuid.to_string().eq(&UUID_FAILED_DIALOG) {
                     let response = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                             DialogResponsePayloadType::DialogEnd,
@@ -74,7 +75,7 @@ impl MediaCastServiceImpl {
                         data: String::from("Failed to connect upstream"),
                     };
                     tx.send(Ok(response)).await.unwrap();
-                } else if uuid.eq(&UUID_FAILED_SEND_EVENT) {
+                } else if uuid.to_string().eq(&UUID_FAILED_SEND_EVENT) {
                     let response = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                             DialogResponsePayloadType::Event,
@@ -83,7 +84,7 @@ impl MediaCastServiceImpl {
                         data: String::from("{\"Connection\":\"Success\"}"),
                     };
                     tx.send(Ok(response)).await.unwrap();
-                } else if uuid.eq(&UUID_FAILED_SEND_EVENT) {
+                } else if uuid.to_string().eq(&UUID_FAILED_SEND_EVENT) {
                     let response = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                             DialogResponsePayloadType::AudioChunk,
