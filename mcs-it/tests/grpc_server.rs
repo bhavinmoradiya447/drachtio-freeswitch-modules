@@ -98,7 +98,7 @@ impl MediaCastService for MediaCastServiceImpl {
 }
 
 
-pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn start_grpc_server() -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting test grpc server...");
     Server::builder()
         .add_service(MediaCastServiceServer::new(MediaCastServiceImpl {}))

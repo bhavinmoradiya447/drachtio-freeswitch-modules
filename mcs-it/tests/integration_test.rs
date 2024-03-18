@@ -32,8 +32,8 @@ async fn test() {
     let mut mcs_child = run_bin("mcs".to_string());
     let mut recorder_child = run_bin("recorder".to_string());
 
-    tokio::spawn(async move || {
-        grpc_server::main().await.expect("TODO: panic message");
+    tokio::spawn(async move {
+        grpc_server::start_grpc_server().await.expect("TODO: panic message");
     });
     // wait for the mcs binary to start
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
