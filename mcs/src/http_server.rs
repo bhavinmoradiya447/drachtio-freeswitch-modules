@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::atomic::AtomicUsize;
@@ -107,21 +108,21 @@ pub async fn start_http_server(
 fn init_open_api() -> impl Filter<Extract=(impl Reply, ), Error=warp::Rejection> + Clone {
     #[derive(OpenApi)]
     #[openapi(
-    paths(
-    crate::http_server::start_cast_handler,
-    crate::http_server::dispatch_event_handler,
-    crate::http_server::stop_cast_handler,
-    crate::http_server::ping_handler,
-    ),
-    components(
-    schemas(crate::http_server::StartCastRequest,
-    crate::http_server::DispatchEventRequest,
-    crate::http_server::StopCastRequest,
-    ),
-    ),
-    tags(
-    (name = "MCS API", description = "Multi Cast Streamer API")
-    )
+        paths(
+            crate::http_server::start_cast_handler,
+            crate::http_server::dispatch_event_handler,
+            crate::http_server::stop_cast_handler,
+            crate::http_server::ping_handler,
+        ),
+        components(
+            schemas(crate::http_server::StartCastRequest,
+                crate::http_server::DispatchEventRequest,
+                crate::http_server::StopCastRequest,
+            ),
+        ),
+        tags(
+            (name = "MCS API", description = "Multi Cast Streamer API")
+        )
     )]
     struct ApiDoc;
 
@@ -332,6 +333,10 @@ fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponseP
             .expect("Failed to send client event");
     } else if payload.payload_type == eval1(&DialogResponsePayloadType::AudioChunk) ||
         payload.payload_type == eval1(&DialogResponsePayloadType::EndOfAudio) {
+        let dir = format!("/tmp/{}", uuid);
+        if !Path::new(dir.as_str()).exists() {
+            fs::create_dir(dir).unwrap();
+        }
         let file_path = format!("/tmp/{}/{}.wav", uuid, payload.data);
         let mut file = OpenOptions::new()
             .create(true)

@@ -1,7 +1,4 @@
 
-[http_server]
-tls_cert_file= "none"
-
 [log]
 appender = "file"
 log_dir = "./target/log"
