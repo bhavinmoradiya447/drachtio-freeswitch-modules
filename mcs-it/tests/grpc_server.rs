@@ -127,7 +127,7 @@ pub async fn start_grpc_server() -> Result<(), Box<dyn std::error::Error>> {
     Server::builder()
         .add_service(MediaCastServiceServer::new(MediaCastServiceImpl {}))
         .serve("0.0.0.0:50052".parse().unwrap())
-        .await?;
+        .await.expect("TODO: panic message");
     info!("####################### Started test grpc server ###################");
 
     Ok(())
