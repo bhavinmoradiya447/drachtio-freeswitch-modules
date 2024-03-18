@@ -97,8 +97,8 @@ impl MediaCastService for MediaCastServiceImpl {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+
+pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting test grpc server...");
     Server::builder()
         .add_service(MediaCastServiceServer::new(MediaCastServiceImpl {}))

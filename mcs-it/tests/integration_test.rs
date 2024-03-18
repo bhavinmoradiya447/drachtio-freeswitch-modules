@@ -11,6 +11,7 @@ use serde_json::json;
 use tracing::{error, info};
 use uuid::Uuid;
 
+mod grpc_server;
 const SLEEP_DURATION_MILLIS: u64 = 20;
 const SLEEP_DURATION_SECS: u64 = 1;
 const CHUNK_SIZE: usize = 640;
@@ -23,15 +24,20 @@ Mutex::new(HashMap::new())};
 
 }
 #[test]
-fn test() {
+#[tokio::test]
+async fn test() {
     // init tracing
     tracing_subscriber::fmt::init();
 
     let mut mcs_child = run_bin("mcs".to_string());
     let mut recorder_child = run_bin("recorder".to_string());
 
+    tokio::spawn(async move || {
+        grpc_server::main().await.expect("TODO: panic message");
+    });
     // wait for the mcs binary to start
-    std::thread::sleep(std::time::Duration::from_secs(1));
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
 
     let (tx, rx) = std::sync::mpsc::channel::<TcpStream>();
     let t0 = std::thread::spawn(|| {
