@@ -25,7 +25,7 @@ Mutex::new(HashMap::new())};
 }
 #[test]
 #[tokio::test]
-async fn test() {
+fn test() {
     // init tracing
     tracing_subscriber::fmt::init();
 
