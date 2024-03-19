@@ -28,7 +28,6 @@ impl MediaCastService for MediaCastServiceImpl {
         &self,
         request: Request<Streaming<DialogRequestPayload>>,
     ) -> Result<Response<Self::DialogStream>, Status> {
-        info!("=========================== GOT CONNECTION =====================");
         let mut stream = request.into_inner();
 
         // create a receiver stream to return
@@ -86,7 +85,6 @@ impl MediaCastServiceImpl {
                     };
                     tx.send(Ok(response)).await.unwrap();
                 } else if uuid.to_string().as_str().eq(UUID_SEND_AUDIO) {
-                    info!(" ======================== SENDING AUDIO CHUNK ===============================");
                     let response = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                             DialogResponsePayloadType::AudioChunk,
@@ -107,7 +105,6 @@ impl MediaCastServiceImpl {
                         data: String::from("test_audio"),
                     };
                     tx.send(Ok(response_end)).await.unwrap();
-                    info!(" ======================== SENT AUDIO CHUNK ===============================");
                 } else {
                     let response = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
@@ -130,7 +127,5 @@ pub async fn start_grpc_server() -> Result<(), Box<dyn std::error::Error>> {
         .add_service(MediaCastServiceServer::new(MediaCastServiceImpl {}))
         .serve("0.0.0.0:50052".parse().unwrap())
         .await.expect("TODO: panic message");
-    info!("####################### Started test grpc server ###################");
-
     Ok(())
 }

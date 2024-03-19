@@ -148,7 +148,7 @@ async fn test() {
     assert_eq!(&6, map.get("start").unwrap());
     assert_eq!(&1, map.get("stop").unwrap());
     assert_eq!(&3, map.get("failed").unwrap());
-    assert_eq!(&3, map.get("event").unwrap());
+    assert_eq!(&5, map.get("event").unwrap());
 
 }
 
