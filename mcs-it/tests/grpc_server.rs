@@ -101,7 +101,7 @@ impl MediaCastServiceImpl {
                     tx.send(Ok(response.clone())).await.unwrap();
                     let response_end = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
-                            DialogResponsePayloadType::ResponseEnd,
+                            DialogResponsePayloadType::EndOfAudio,
                         ),
                         audio: vec![255; 320],
                         data: String::from("test_audio"),
