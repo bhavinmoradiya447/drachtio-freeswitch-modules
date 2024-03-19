@@ -250,7 +250,6 @@ async fn start_cast_handler(
         let payload_stream = async_stream::stream! {
             while let Ok(mut addr_payload) = receiver.recv().await {
                 let payload_type = addr_payload.payload.payload_type;
-                info!("GOT PAYLOAD with type {}", payload_type);
                 process_payload(&mut addr_payload.payload, mode.clone(), codec.clone());
                 if payload_type == eval(&DialogRequestPayloadType::AudioStart) && address.clone() != addr_payload.address {
                     continue;
