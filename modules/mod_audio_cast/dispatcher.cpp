@@ -23,10 +23,10 @@ dispatcher::~dispatcher() {
     }
 }
 
-void dispatcher::dispatch_to_ds(char* audio_buf, int size, uuid_t id, int seq, unsigned long timestamp) {
-    int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
+void dispatcher::dispatch_to_ds(char* audio_buf, int size, uuid_t id, int seq, unsigned long timestamp,  char* left_buf, int left_size, char* right_buf, int right_size) {
+    int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int) + sizeof(int) + sizeof(int);
     // compute buffer size
-    unsigned int len = header_size + size;
+    unsigned int len = header_size + size + left_size + right_size;
 
     // create buffer
     char * buf = new char[len];
@@ -43,10 +43,23 @@ void dispatcher::dispatch_to_ds(char* audio_buf, int size, uuid_t id, int seq, u
     // copy size to buffer
     memcpy(buf + pos, &size, sizeof(int));
     pos = pos + sizeof(int);
+   
+    memcpy(buf + pos, &left_size, sizeof(int));
+    pos = pos + sizeof(int);
+    
+    memcpy(buf + pos, &right_size, sizeof(int));
+    pos = pos + sizeof(int);
+    
     // copy payload to buffer
     if(size>0) {
         memcpy(buf + pos, audio_buf, size);
+        pos = pos + size;
+        memcpy(buf + pos, left_buf, left_size);
+        pos = pos + left_size;
+        memcpy(buf + pos, right_buf, right_size);
         delete[] audio_buf;
+        delete[] left_buf;
+        delete[] right_buf;
     } else {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] queued end of stream for: %s\n", call_uuid);
     }
@@ -57,29 +70,50 @@ void dispatcher::dispatch(payload * p) {
     
     char * buf = new char[p->size];
     memcpy(buf, p->buf, p->size);
-            
+
+    char * left_buf = new char[p->left_size];
+    memcpy(left_buf, p->left_buf, p->left_size);
+
+    char * right_buf = new char[p->right_size];
+    memcpy(right_buf, p->right_buf, p->right_size);
+
     if(p->size !=0 ) {
         if(!batch_buf){
             batch_buf = (char*)realloc(buf, p->size);
             batch_buf_len = p->size;
+            
+            batch_left_buf = (char*)realloc(left_buf, p->left_size);
+            batch_left_buf_len = p->left_size;
+            
+            batch_right_buf = (char*)realloc(right_buf, p->right_size);
+            batch_right_buf_len = p->right_size;
+            
         } else {
             batch_buf = concat(batch_buf, batch_buf_len, buf, p->size);
             batch_buf_len = batch_buf_len + p->size;
+
+            batch_left_buf = concat(batch_left_buf, batch_left_buf_len, left_buf, p->left_size);
+            batch_left_buf_len = batch_left_buf_len + p->left_size;
+
+            batch_right_buf = concat(batch_right_buf, batch_right_buf_len, right_buf, p->right_size);
+            batch_right_buf_len = batch_right_buf_len + p->right_size;
+
+
         }
         if(p->seq % batch_size == 0) {
         
             // fixed size header 32 bytes
-            dispatch_to_ds(batch_buf, batch_buf_len, p->id, seq++, p->timestamp);            
+            dispatch_to_ds(batch_buf, batch_buf_len, p->id, seq++, p->timestamp, batch_left_buf, batch_left_buf_len, batch_right_buf, batch_right_buf_len);            
             batch_buf = nullptr;
             batch_buf_len =0;
         }
     } else {
         if(batch_buf){
-            dispatch_to_ds(batch_buf, batch_buf_len, p->id, seq++, p->timestamp);            
+            dispatch_to_ds(batch_buf, batch_buf_len, p->id, seq++, p->timestamp, batch_left_buf, batch_left_buf_len, batch_right_buf, batch_right_buf_len);            
             batch_buf = nullptr;
             batch_buf_len =0;
         }
-        dispatch_to_ds(buf, p->size, p->id, seq++, p->timestamp);            
+        dispatch_to_ds(buf, p->size, p->id, seq++, p->timestamp, p->left_buf, p->left_size, p->right_buf, p->right_size);            
     } 
 }
 
