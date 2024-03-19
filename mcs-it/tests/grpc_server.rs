@@ -112,14 +112,6 @@ impl MediaCastServiceImpl {
                         data: String::from("Success"),
                     };
                     tx.send(Ok(response1)).await.unwrap();
-                    let response = DialogResponsePayload {
-                        payload_type: <DialogResponsePayloadType as Into<i32>>::into(
-                            DialogResponsePayloadType::ResponseEnd,
-                        ),
-                        audio: Vec::new(),
-                        data: String::from("Success"),
-                    };
-                    //tx.send(Ok(response)).await.unwrap();
                 }
             });
         }
