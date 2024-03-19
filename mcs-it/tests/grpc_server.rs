@@ -86,6 +86,7 @@ impl MediaCastServiceImpl {
                     };
                     tx.send(Ok(response)).await.unwrap();
                 } else if uuid.to_string().as_str().eq(UUID_SEND_AUDIO) {
+                    info!(" ======================== SENDING AUDIO CHUNK ===============================");
                     let response = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                             DialogResponsePayloadType::AudioChunk,
