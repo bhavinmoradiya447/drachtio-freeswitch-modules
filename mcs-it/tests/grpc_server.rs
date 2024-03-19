@@ -1,7 +1,5 @@
-use std::{collections::HashMap, fs::File, io::Write};
 use std::string::ToString;
 use log::info;
-use serde_json::to_string;
 use tokio;
 use tokio::sync::mpsc::Sender;
 use tokio_stream::wrappers::ReceiverStream;

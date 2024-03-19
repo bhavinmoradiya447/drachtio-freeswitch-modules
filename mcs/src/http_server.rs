@@ -108,21 +108,21 @@ pub async fn start_http_server(
 fn init_open_api() -> impl Filter<Extract=(impl Reply, ), Error=warp::Rejection> + Clone {
     #[derive(OpenApi)]
     #[openapi(
-        paths(
-            crate::http_server::start_cast_handler,
-            crate::http_server::dispatch_event_handler,
-            crate::http_server::stop_cast_handler,
-            crate::http_server::ping_handler,
-        ),
-        components(
-            schemas(crate::http_server::StartCastRequest,
-                crate::http_server::DispatchEventRequest,
-                crate::http_server::StopCastRequest,
-            ),
-        ),
-        tags(
-            (name = "MCS API", description = "Multi Cast Streamer API")
-        )
+    paths(
+    crate::http_server::start_cast_handler,
+    crate::http_server::dispatch_event_handler,
+    crate::http_server::stop_cast_handler,
+    crate::http_server::ping_handler,
+    ),
+    components(
+    schemas(crate::http_server::StartCastRequest,
+    crate::http_server::DispatchEventRequest,
+    crate::http_server::StopCastRequest,
+    ),
+    ),
+    tags(
+    (name = "MCS API", description = "Multi Cast Streamer API")
+    )
     )]
     struct ApiDoc;
 
@@ -284,9 +284,13 @@ async fn start_cast_handler(
                                                                               "subscriber-error"))
                                 .expect("Failed to send start client error");
                         } else if is_first_message {
+                            let mut data = metadata.as_str();
+                            if payload.payload_type == eval1(&DialogResponsePayloadType::DialogStart) {
+                                data = payload.data.as_str();
+                            }
                             event_sender1.send(get_start_success_event_command(uuid_clone.as_str(),
                                                                                address_clone.as_str(),
-                                                                               metadata.as_str()))
+                                                                               data))
                                 .expect("Failed to send start success event");
                         }
                         is_first_message = false;

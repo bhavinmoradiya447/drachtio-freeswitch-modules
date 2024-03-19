@@ -31,6 +31,7 @@ enum DialogResponsePayloadType {
     END_OF_AUDIO = 2; // all audio chunks sent
     DIALOG_END = 3; // end of dialog, event_data may contain message with cause
     RESPONSE_END = 4; // end of response stream
+    DIALOG_START = 5; // start of dialog, data may contain message, server should send this to ack.
 }
 
 message DialogResponsePayload {
