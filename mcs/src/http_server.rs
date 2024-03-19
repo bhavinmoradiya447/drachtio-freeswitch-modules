@@ -332,10 +332,12 @@ fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponseP
     // log error on failure
 
     if payload.payload_type == eval1(&DialogResponsePayloadType::Event) {
+        info!("==================== GOT EVENT =====================");
         event_sender.send(get_event_command(uuid, address, "subscriber-event", payload.data.as_str()))
             .expect("Failed to send client event");
     } else if payload.payload_type == eval1(&DialogResponsePayloadType::AudioChunk) ||
         payload.payload_type == eval1(&DialogResponsePayloadType::EndOfAudio) {
+        info!("==================== GOT ADUIO =====================");
         let dir = format!("/tmp/{}", uuid);
         if !Path::new(dir.as_str()).exists() {
             fs::create_dir(dir).unwrap();
@@ -356,6 +358,8 @@ fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponseP
             if let Err(e) = file.flush() {
                 error!("failed to flush file; error = {:?}", e);
             }
+            info!("==================== GOT END ADUIO =====================");
+
             let payload = format!("{{\"file_path\":\"{}\"}}", file_path);
             event_sender.send(get_event_command(uuid, address, "subscriber-playback", payload.as_str()))
                 .expect("Failed to send client event");
