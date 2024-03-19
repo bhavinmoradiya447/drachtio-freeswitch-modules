@@ -107,6 +107,7 @@ impl MediaCastServiceImpl {
                         data: String::from("test_audio"),
                     };
                     tx.send(Ok(response_end)).await.unwrap();
+                    info!(" ======================== SENT AUDIO CHUNK ===============================");
                 } else {
                     let response = DialogResponsePayload {
                         payload_type: <DialogResponsePayloadType as Into<i32>>::into(
