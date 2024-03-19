@@ -56,7 +56,7 @@ pub async fn start_udp_server(
             }
         }
     })
-    .await?;
+        .await?;
     Ok(())
 }
 
@@ -64,8 +64,16 @@ fn parse_payload(buf: Vec<u8>) -> AddressPayload {
     let mut payload = DialogRequestPayload::default();
     payload.uuid = Uuid::from_slice(&buf[0..16]).unwrap().to_string();
     payload.timestamp = u64::from_ne_bytes(buf[20..28].try_into().unwrap());
-    payload.audio = buf[32..].to_vec();
-    if payload.audio.len() > 0 {
+    let size = u32::from_ne_bytes(buf[28..32].try_into().unwrap());
+    let left_size = u32::from_ne_bytes(buf[32..36].try_into().unwrap());
+    let right_size = u32::from_ne_bytes(buf[36..40].try_into().unwrap());
+    if size > 0 {
+        let combine_audio_start_at = 40;
+        payload.audio = buf[combine_audio_start_at..combine_audio_start_at + size].to_vec();
+        let left_audio_start_at = combine_audio_start_at + size;
+        payload.audio_left = buf[left_audio_start_at..left_audio_start_at + left_size].to_vec();
+        let right_audio_start_at = left_audio_start_at + left_size;
+        payload.audio_right = buf[right_audio_start_at..right_audio_start_at + right_size].to_vec();
         payload.payload_type = DialogRequestPayloadType::AudioCombined.into();
     } else {
         payload.payload_type = DialogRequestPayloadType::AudioEnd.into();

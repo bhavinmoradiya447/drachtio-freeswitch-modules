@@ -365,12 +365,16 @@ fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponseP
 }
 
 fn process_payload(payload: &mut DialogRequestPayload, mode: String, codec: String) {
-    if payload.payload_type == eval(&DialogRequestPayloadType::AudioCombined) && mode == "split" {
-        let (left, right) = handle_split(&payload.audio, codec.clone());
-        payload.audio_left = left;
-        payload.audio_right = right;
+    if mode == "split" {
+        //let (left, right) = handle_split(&payload.audio, codec.clone());
+        //payload.audio_left = left;
+        //payload.audio_right = right;
         payload.payload_type = DialogRequestPayloadType::AudioSplit.into();
         payload.audio.clear();
+    } else {
+        payload.payload_type = DialogRequestPayloadType::AudioCombined.into();
+        payload.audio_left.clear();
+        payload.audio_right.clear();
     }
 }
 
