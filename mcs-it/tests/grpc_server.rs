@@ -119,7 +119,7 @@ impl MediaCastServiceImpl {
                         audio: Vec::new(),
                         data: String::from("Success"),
                     };
-                    tx.send(Ok(response)).await.unwrap();
+                    //tx.send(Ok(response)).await.unwrap();
                 }
             });
         }
