@@ -225,7 +225,7 @@ switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char 
         p->size = 0;
         p->buf =  NULL;
         p->left_buf = NULL;
-        p->right_bug = NULL; 
+        p->right_buf = NULL; 
         p->left_size = 0;
         p->right_size = 0;
         dispatcher *disp = static_cast<dispatcher *>(tech_pvt->disp);
@@ -358,7 +358,7 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
           per_channel_datalen = frame.datalen / 2 / sizeof(short);
           left = (unsigned char*)  malloc(per_channel_datalen);
           right = (unsigned char*)  malloc(per_channel_datalen);
-          convert_linear2_g711_pcmu8k((char *)frame.data, &frame.datalen, left, right);
+          convert_linear2_g711_pcmu8k((char *)frame.data, &frame.datalen, (char *)left, (char *)right);
           
           payload * p = new payload;
           uuid_parse(tech_pvt->sessionId, p->id);
@@ -368,8 +368,8 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
           p->buf =  static_cast<char *>(frame.data);
           p->left_size = per_channel_datalen;
           p->right_size = per_channel_datalen;
-          p->left_buf = left;
-          p-right_buf = right;
+          p->left_buf = (char *)left;
+          p->right_buf = (char *)right;
           dispatcher *disp = static_cast<dispatcher *>(tech_pvt->disp);
           disp->dispatch(p);
           delete p;

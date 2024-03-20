@@ -64,11 +64,11 @@ fn parse_payload(buf: Vec<u8>) -> AddressPayload {
     let mut payload = DialogRequestPayload::default();
     payload.uuid = Uuid::from_slice(&buf[0..16]).unwrap().to_string();
     payload.timestamp = u64::from_ne_bytes(buf[20..28].try_into().unwrap());
-    let size = u32::from_ne_bytes(buf[28..32].try_into().unwrap());
-    let left_size = u32::from_ne_bytes(buf[32..36].try_into().unwrap());
-    let right_size = u32::from_ne_bytes(buf[36..40].try_into().unwrap());
+    let size = u32::from_ne_bytes(buf[28..32].try_into().unwrap()) as usize;
+    let left_size = u32::from_ne_bytes(buf[32..36].try_into().unwrap()) as usize;
+    let right_size = u32::from_ne_bytes(buf[36..40].try_into().unwrap()) as usize;
     if size > 0 {
-        let combine_audio_start_at = 40;
+        let combine_audio_start_at = 40usize;
         payload.audio = buf[combine_audio_start_at..combine_audio_start_at + size].to_vec();
         let left_audio_start_at = combine_audio_start_at + size;
         payload.audio_left = buf[left_audio_start_at..left_audio_start_at + left_size].to_vec();
