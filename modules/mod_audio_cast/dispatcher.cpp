@@ -57,13 +57,14 @@ void dispatcher::dispatch_to_ds(char* audio_buf, int size, uuid_t id, int seq, u
         memcpy(buf + pos, left_buf, left_size);
         pos = pos + left_size;
         memcpy(buf + pos, right_buf, right_size);
+        pos = pos + right_size;
         delete[] audio_buf;
         delete[] left_buf;
         delete[] right_buf;
     } else {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"[info] queued end of stream for: %s\n", call_uuid);
     }
-    write_to_ds(fd, buf);
+    write_to_ds(fd, buf, pos);
            
 }
 void dispatcher::dispatch(payload * p) {
@@ -126,13 +127,8 @@ char* dispatcher::concat(char* a, size_t a_size, char* b, size_t b_size) {
 
 
 
-void dispatcher::write_to_ds(int fd, char * buf) {
-    int size;
-    int header_size = 16 + sizeof(int) + sizeof(long) + sizeof(int);
-    int size_pos = 16 + sizeof(int) + sizeof(long);
-    memcpy(&size, buf + size_pos, sizeof(int));
-
-    if (sendto(fd, buf, header_size + size, 0, (struct sockaddr *)&remote, sizeof(remote)) == -1) {
+void dispatcher::write_to_ds(int fd, char * buf, int size) {
+    if (sendto(fd, buf, size, 0, (struct sockaddr *)&remote, sizeof(remote)) == -1) {
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error writing to Domain socket: %s, ERROR: %s\n", call_uuid, strerror(errno));
             connet_ds_socket();
     }

@@ -365,7 +365,7 @@ fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponseP
 }
 
 fn process_payload(payload: &mut DialogRequestPayload, mode: String, codec: String) {
-    if mode == "split" {
+    if mode.as_str() == "split" {
         //let (left, right) = handle_split(&payload.audio, codec.clone());
         //payload.audio_left = left;
         //payload.audio_right = right;
