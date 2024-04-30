@@ -14,7 +14,7 @@ pub async fn start_udp_server(
     // get socket path from the config
     let socket_path = CONFIG.udp_server.socket_file.clone();
     // delete the socket file if it already exists
-    tokio::fs::remove_file(socket_path.clone()).await.ok();
+    // tokio::fs::remove_file(socket_path.clone()).await.ok();
     info!("binding to socket: {}", socket_path);
     // bind to the socket log on error
     let socket = UnixDatagram::bind(socket_path)?;
@@ -37,14 +37,16 @@ pub async fn start_udp_server(
             {
                 let mut done = false;
                 // get channel from the map or log missing channel and continue
-                let channel = match channels.uuid_sender_map.get(&uuid) {
+                let codec_sender = match channels.uuid_sender_map.get(&uuid) {
                     Some(channel) => channel,
                     None => {
                         continue;
                     }
                 };
+                let channel = &codec_sender.sender;
                 // send the buffer to the channel and log on error
-                if let Err(_e) = channel.send(parse_payload(buffer[..size].to_vec())) {
+                if let Err(_e) = channel.send(
+                    parse_payload(buffer[..size].to_vec(), codec_sender.codec.clone())) {
                     error!("failed to send to channel; uuid = {}", uuid);
                     done = true;
                 }
@@ -56,25 +58,35 @@ pub async fn start_udp_server(
             }
         }
     })
-        .await?;
+    .await?;
     Ok(())
 }
 
-fn parse_payload(buf: Vec<u8>) -> AddressPayload {
+fn parse_payload(buf: Vec<u8>, codec: String) -> AddressPayload {
     let mut payload = DialogRequestPayload::default();
     payload.uuid = Uuid::from_slice(&buf[0..16]).unwrap().to_string();
     payload.timestamp = u64::from_ne_bytes(buf[20..28].try_into().unwrap());
-    let size = u32::from_ne_bytes(buf[28..32].try_into().unwrap()) as usize;
-    let left_size = u32::from_ne_bytes(buf[32..36].try_into().unwrap()) as usize;
-    let right_size = u32::from_ne_bytes(buf[36..40].try_into().unwrap()) as usize;
-    if size > 0 {
-        let combine_audio_start_at = 40usize;
-        payload.audio = buf[combine_audio_start_at..combine_audio_start_at + size].to_vec();
-        let left_audio_start_at = combine_audio_start_at + size;
-        payload.audio_left = buf[left_audio_start_at..left_audio_start_at + left_size].to_vec();
-        let right_audio_start_at = left_audio_start_at + left_size;
-        payload.audio_right = buf[right_audio_start_at..right_audio_start_at + right_size].to_vec();
+    payload.audio = buf[32..].to_vec();
+    let split_len = payload.audio.len() / 2;
+    payload.audio_left = Vec::with_capacity(split_len);
+    payload.audio_right = Vec::with_capacity(split_len);
+    if payload.audio.len() > 0 {
         payload.payload_type = DialogRequestPayloadType::AudioCombined.into();
+        if codec == "pcm16" {
+            for i in (0..payload.audio.len()).step_by(4) {
+                let i = i as usize;
+                payload.audio_left.push(payload.audio[i]);
+                payload.audio_left.push(payload.audio[i + 1]);
+                payload.audio_right.push(payload.audio[i + 2]);
+                payload.audio_right.push(payload.audio[i + 3]);
+            }
+        } else {
+            for i in (0..payload.audio.len()).step_by(2) {
+                let i = i as usize;
+                payload.audio_left.push(payload.audio[i]);
+                payload.audio_right.push(payload.audio[i + 1]);
+            }
+        }
     } else {
         payload.payload_type = DialogRequestPayloadType::AudioEnd.into();
     }
@@ -100,7 +112,7 @@ mod tests {
         buf.extend_from_slice(&timestamp);
         let len: u32 = 0;
         buf.extend_from_slice(&len.to_le_bytes());
-        let payload = parse_payload(buf);
+        let payload = parse_payload(buf, "pcm16".to_string());
         assert_eq!(payload.payload.uuid, uuid.to_string());
         assert_eq!(payload.payload.audio.len(), 0);
     }

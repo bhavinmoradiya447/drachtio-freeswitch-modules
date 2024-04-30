@@ -28,11 +28,12 @@ pub mod mcs {
 use crate::mcs::media_cast_service_client::MediaCastServiceClient;
 use crate::mcs::DialogRequestPayloadType;
 use crate::mcs::DialogRequestPayload;
-use crate::AddressPayload;
+use crate::{AddressPayload, CodecSender};
 use crate::mcs::DialogResponsePayload;
 use crate::mcs::DialogResponsePayloadType;
 use crate::UuidChannels;
 use crate::CONFIG;
+use crate::db_client::{CallDetails, DbClient};
 use crate::fs_tcp_client::{get_event_command, get_start_failed_event_command, get_start_success_event_command, get_stop_failed_event_command, get_stop_success_event_command};
 
 #[derive(Debug, Default, Clone)]
@@ -60,9 +61,11 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 pub async fn start_http_server(
     uuid_channels: Arc<Mutex<UuidChannels>>,
     event_sender: UnboundedSender<String>,
+    db_client: &DbClient,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let with_uuid_channel = warp::any().map(move || Arc::clone(&uuid_channels));
     let with_event_sender = warp::any().map(move || event_sender.clone());
+    let with_db_client = warp::any().map(move || db_client);
 
     let address_client = Arc::new(Mutex::new(AddressClients::default()));
     let with_address_client = warp::any().map(move || Arc::clone(&address_client));
@@ -73,7 +76,8 @@ pub async fn start_http_server(
         .and(with_uuid_channel.clone())
         .and(with_address_client.clone())
         .and(with_event_sender.clone())
-        .and_then(start_cast_handler);
+        .and(with_db_client.clone())
+        .and_then(start_cast_handle);
 
     let stop_cast = warp::path!("stop_cast")
         .and(warp::post())
@@ -192,6 +196,7 @@ async fn start_cast_handler(
     channels: Arc<Mutex<UuidChannels>>,
     address_client: Arc<Mutex<AddressClients>>,
     event_sender: UnboundedSender<String>,
+    db_client: &DbClient,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let count = COUNTER.fetch_add(1, SeqCst);
     let uuid = request.uuid.clone();
@@ -236,21 +241,26 @@ async fn start_cast_handler(
         None => {
             info!("creating channel in http_server for uuid: {}", uuid);
             let (tx, _) = broadcast::channel(1000);
-            channels.uuid_sender_map.insert(uuid.clone(), tx.clone());
-            tx
+            // create CodecSender and insert into map
+            let codec_sender = CodecSender {
+                codec: codec.clone(),
+                sender: tx.clone(),
+            };
+            channels.uuid_sender_map.insert(uuid.clone(), codec_sender.clone());
+            codec_sender
         }
-    };
+    }.sender.clone();
     let metadata_clone = metadata.clone();
-
     let mut receiver = channel.subscribe();
     tokio::spawn(async move {
         info!("init payload stream for uuid: {} to: {}", uuid, address);
         let address_clone = address.clone();
         let uuid_clone = uuid.clone();
+        let db_client1 = db_client.clone();
         let payload_stream = async_stream::stream! {
             while let Ok(mut addr_payload) = receiver.recv().await {
                 let payload_type = addr_payload.payload.payload_type;
-                process_payload(&mut addr_payload.payload, mode.clone(), codec.clone());
+                process_payload(&mut addr_payload.payload, mode.clone());
                 if payload_type == eval(&DialogRequestPayloadType::AudioStart) && address.clone() != addr_payload.address {
                     continue;
                 }
@@ -263,10 +273,12 @@ async fn start_cast_handler(
                         if Path::new(file_path.as_str()).exists() {
                          std::fs::remove_dir_all(file_path).expect("Failed to remove Directory");
                         }
+                        db_client1.delete_by_call_leg_and_client_address(uuid.clone(), address.clone());
                     }
                     break;
                 }
             }
+
         };
         let request = tonic::Request::new(payload_stream);
         let event_sender1 = event_sender.clone();
@@ -292,6 +304,13 @@ async fn start_cast_handler(
                                                                                address_clone.as_str(),
                                                                                data))
                                 .expect("Failed to send start success event");
+                            db_client.insert(CallDetails {
+                                call_leg_id: uuid_clone.clone(),
+                                client_address: address_clone.clone(),
+                                codec: codec.clone(),
+                                mode: mode.clone(),
+                                metadata: metadata.clone(),
+                            })
                         }
                         is_first_message = false;
                         if payload.payload_type == eval1(&DialogResponsePayloadType::ResponseEnd) {
@@ -364,17 +383,14 @@ fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponseP
     }
 }
 
-fn process_payload(payload: &mut DialogRequestPayload, mode: String, codec: String) {
-    if mode.as_str() == "split" {
-        //let (left, right) = handle_split(&payload.audio, codec.clone());
-        //payload.audio_left = left;
-        //payload.audio_right = right;
-        payload.payload_type = DialogRequestPayloadType::AudioSplit.into();
-        payload.audio.clear();
-    } else {
-        payload.payload_type = DialogRequestPayloadType::AudioCombined.into();
-        payload.audio_left.clear();
-        payload.audio_right.clear();
+fn process_payload(payload: &mut DialogRequestPayload, mode: String) {
+    if payload.payload_type == eval(&DialogRequestPayloadType::AudioCombined) {
+        if mode == "split" {
+            payload.audio.clear();
+        } else {
+            payload.audio_left.clear();
+            payload.audio_right.clear();
+        }
     }
 }
 
@@ -384,29 +400,6 @@ fn eval(payload_type: &DialogRequestPayloadType) -> i32 {
 
 fn eval1(payload_type: &DialogResponsePayloadType) -> i32 {
     *payload_type as i32
-}
-
-#[instrument(name = "handle_split", skip(audio, codec))]
-fn handle_split(audio: &Vec<u8>, codec: String) -> (Vec<u8>, Vec<u8>) {
-    let split_size = audio.len() / 2;
-    let mut left = Vec::with_capacity(split_size as usize);
-    let mut right = Vec::with_capacity(split_size as usize);
-    if codec == "pcm16" {
-        for i in (0..audio.len()).step_by(4) {
-            let i = i as usize;
-            left.push(audio[i]);
-            left.push(audio[i + 1]);
-            right.push(audio[i + 2]);
-            right.push(audio[i + 3]);
-        }
-    } else {
-        for i in (0..audio.len()).step_by(2) {
-            let i = i as usize;
-            left.push(audio[i]);
-            right.push(audio[i + 1]);
-        }
-    }
-    (left, right)
 }
 
 #[derive(Debug, serde::Deserialize, ToSchema)]
@@ -431,7 +424,7 @@ async fn dispatch_event_handler(
         }
     };
 
-    if let Err(e) = channel.send(AddressPayload::new_with_event_data(
+    if let Err(e) = channel.sender.send(AddressPayload::new_with_event_data(
         request.uuid,
         DialogRequestPayloadType::EventData.into(),
         request.event_data,
@@ -455,7 +448,7 @@ struct StopCastRequest {
 async fn stop_cast_handler(
     request: StopCastRequest,
     channels: Arc<Mutex<UuidChannels>>,
-    event_sender: UnboundedSender<String>,
+    event_sender: UnboundedSender<String>
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let uuid = request.uuid;
     let address = request.address;
@@ -476,7 +469,7 @@ async fn stop_cast_handler(
         }
     };
     if channel.is_some() {
-        if let Err(e) = channel.unwrap().send(AddressPayload::new(
+        if let Err(e) = channel.unwrap().sender.send(AddressPayload::new(
             uuid.clone(),
             DialogRequestPayloadType::AudioStop.into(),
             address.clone(),
@@ -503,18 +496,4 @@ async fn stop_cast_handler(
 #[instrument(name = "ping")]
 pub async fn ping_handler() -> Result<impl warp::Reply, warp::Rejection> {
     Ok(warp::reply::json(&"pong"))
-}
-
-// unit tests
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_handle_split() {
-        let audio = vec![1, 2, 3, 4, 5, 6, 7, 8];
-        let (left, right) = handle_split(&audio, "split-pcm16".to_string());
-        assert_eq!(left, vec![1, 2, 5, 6]);
-        assert_eq!(right, vec![3, 4, 7, 8]);
-    }
 }
