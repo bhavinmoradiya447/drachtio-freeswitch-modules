@@ -48,13 +48,19 @@ impl DbClient {
         let query = format!("DELETE from CALL_DETAILS where CALL_LEG_ID=\"{}\" and CLIENT_ADDRESS=\"{}\"",
                             call_leg_id,
                             client_address);
-        self.connection.execute(query).unwrap();
+        match self.connection.execute(query) {
+            Ok(()) => info!("Successfully deleted {} , {}", call_leg_id, client_address),
+            Err(e) => error!("Failed to delete {} , {}", call_leg_id, client_address)
+        }
     }
 
     pub fn delete_by_call_leg_id(&self, call_leg_id: String) {
         let query = format!("DELETE from CALL_DETAILS where CALL_LEG_ID=\"{}\"",
                             call_leg_id);
-        self.connection.execute(query).unwrap();
+        match self.connection.execute(query) {
+            Ok(()) => info!("Successfully deleted {} ", call_leg_id),
+            Err(e) => error!("Failed to delete {} ", call_leg_id)
+        }
     }
 
     pub fn select_all(&self) -> Vec<CallDetails> {
@@ -75,6 +81,7 @@ impl DbClient {
                 true
             })
             .unwrap();
+        info!("Select query return {} rows, values: {:?}", call_details.len(), call_details);
         call_details
     }
 }
