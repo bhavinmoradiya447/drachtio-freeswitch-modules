@@ -189,7 +189,7 @@ struct StartCastRequest {
 }
 
 #[utoipa::path(post, path = "/start_cast", request_body = StartCastRequest)]
-#[instrument(name = "start_cast", skip(channels, address_client))]
+#[instrument(name = "start_cast", skip(channels, address_client, db_client))]
 async fn start_cast_handler(
     // body: HashMap<String, String>,
     request: StartCastRequest,

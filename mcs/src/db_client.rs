@@ -10,7 +10,6 @@ pub struct CallDetails {
     pub metadata: String,
 }
 
-
 pub struct DbClient {
     connection: ConnectionThreadSafe,
 }
