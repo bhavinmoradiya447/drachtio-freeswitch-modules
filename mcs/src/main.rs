@@ -76,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (event_publisher, event_receiver) = tokio::sync::mpsc::unbounded_channel::<String>();
     let db_client = DbClient::new();
     tokio::try_join!(
-        start_http_server(Arc::clone(&channels), event_publisher.clone(), &db_client),
+        start_http_server(Arc::clone(&channels), event_publisher.clone(), db_client),
         start_udp_server(Arc::clone(&channels)),
         start_fs_esl_client(event_receiver, event_publisher.clone(), CONFIG.fs_esl_client.host.clone()),
     )?;
