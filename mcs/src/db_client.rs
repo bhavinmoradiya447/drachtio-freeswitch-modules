@@ -1,5 +1,5 @@
 use sqlite::{Connection, ConnectionThreadSafe};
-use tracing::{error, info}
+use tracing::{error, info};
 
 #[derive(Debug, Default)]
 pub struct CallDetails {
