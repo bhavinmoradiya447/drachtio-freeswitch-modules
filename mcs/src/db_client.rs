@@ -1,5 +1,5 @@
 use sqlite::{Connection, ConnectionThreadSafe};
-use tracing_subscriber::fmt::format;
+use tracing::{error, info}
 
 #[derive(Debug, Default)]
 pub struct CallDetails {
@@ -16,7 +16,7 @@ pub struct DbClient {
 
 impl DbClient {
     pub fn new() -> Self {
-        let mut connection = Connection::open_thread_safe("call-details-db").unwrap();
+        let connection = Connection::open_thread_safe("call-details-db").unwrap();
         let query = "
             BEGIN;
             CREATE TABLE IF NOT EXISTS CALL_DETAILS (
@@ -37,7 +37,11 @@ impl DbClient {
         let query = format!("INSERT into CALL_DETAILS values(\"{}\",\"{}\",\"{}\",\"{}\",\"{}\")",
                             call_details.call_leg_id,
                             call_details.client_address, call_details.codec, call_details.mode, call_details.metadata);
-        self.connection.execute(query).unwrap();
+        match self.connection.execute(query)
+        {
+            Ok(()) => info!("Successfully inserted {} , {}", call_details.call_leg_id, call_details.client_address),
+            Err(e) => error!("Failed to insert {} , {}", call_details.call_leg_id, call_details.client_address)
+        }
     }
 
     pub fn delete_by_call_leg_and_client_address(&self, call_leg_id: String, client_address: String) {
