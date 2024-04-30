@@ -40,7 +40,7 @@ impl DbClient {
         match self.connection.execute(query)
         {
             Ok(()) => info!("Successfully inserted {} , {}", call_details.call_leg_id, call_details.client_address),
-            Err(e) => error!("Failed to insert {} , {}", call_details.call_leg_id, call_details.client_address)
+            Err(e) => error!("Failed to insert {} , {}, Error: {}", call_details.call_leg_id, call_details.client_address, e)
         }
     }
 
@@ -50,7 +50,7 @@ impl DbClient {
                             client_address);
         match self.connection.execute(query) {
             Ok(()) => info!("Successfully deleted {} , {}", call_leg_id, client_address),
-            Err(e) => error!("Failed to delete {} , {}", call_leg_id, client_address)
+            Err(e) => error!("Failed to delete {} , {}, Error: {}", call_leg_id, client_address, e)
         }
     }
 
@@ -59,7 +59,7 @@ impl DbClient {
                             call_leg_id);
         match self.connection.execute(query) {
             Ok(()) => info!("Successfully deleted {} ", call_leg_id),
-            Err(e) => error!("Failed to delete {} ", call_leg_id)
+            Err(e) => error!("Failed to delete {} , Error: {}", call_leg_id, e)
         }
     }
 
@@ -69,7 +69,7 @@ impl DbClient {
 
         let query = "SELECT * FROM CALL_DETAILS";
 
-        self.connection
+        match self.connection
             .iterate(query, |pairs| {
                 call_details.push(CallDetails {
                     call_leg_id: pairs.get(0).unwrap().1.unwrap().parse().unwrap(),
@@ -79,8 +79,11 @@ impl DbClient {
                     metadata: pairs.get(4).unwrap().1.unwrap().parse().unwrap(),
                 });
                 true
-            })
-            .unwrap();
+            }) {
+            Ok(()) => info!("Successfully executed select query"),
+            Err(e) => error!("Failed to execute select, Error: {}", e)
+        }
+
         info!("Select query return {} rows, values: {:?}", call_details.len(), call_details);
         call_details
     }
