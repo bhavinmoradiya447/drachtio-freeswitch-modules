@@ -305,7 +305,7 @@ async fn start_cast_handler(
                                                                                address_clone.as_str(),
                                                                                data))
                                 .expect("Failed to send start success event");
-                            db_client.insert(CallDetails {
+                            db_client1.insert(CallDetails {
                                 call_leg_id: uuid_clone.clone(),
                                 client_address: address_clone.clone(),
                                 codec: codec.clone(),
