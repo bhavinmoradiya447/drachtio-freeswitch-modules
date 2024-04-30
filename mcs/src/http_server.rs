@@ -253,7 +253,7 @@ async fn start_cast_handler(
     }.sender.clone();
     let metadata_clone = metadata.clone();
     let mut receiver = channel.subscribe();
-    let static db_client1 = db_client.clone();
+    static db_client1: _ = db_client.clone();
     tokio::spawn(async move {
         info!("init payload stream for uuid: {} to: {}", uuid, address);
         let address_clone = address.clone();
