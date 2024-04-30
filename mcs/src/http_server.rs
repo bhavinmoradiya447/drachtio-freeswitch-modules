@@ -203,6 +203,7 @@ async fn start_cast_handler(
     let address = request.address.clone();
     let codec = request.codec.unwrap_or("mulaw".to_string());
     let mode = request.mode.unwrap_or("combined".to_string());
+    let mode_clone = mode.clone();
     let metadata = request.metadata.unwrap_or("".to_string()).clone();
     let group = (count / CONFIG.http_server.grpc_connection_pool) % CONFIG.http_server.grpc_connection_pool;
     let address_key = format!("{}-{}", address, group);
@@ -308,7 +309,7 @@ async fn start_cast_handler(
                                 call_leg_id: uuid_clone.clone(),
                                 client_address: address_clone.clone(),
                                 codec: codec.clone(),
-                                mode: mode.clone(),
+                                mode: mode_clone.clone(),
                                 metadata: metadata.clone(),
                             })
                         }
