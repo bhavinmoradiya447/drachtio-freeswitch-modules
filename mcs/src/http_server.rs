@@ -77,7 +77,7 @@ pub async fn start_http_server(
         .and(with_address_client.clone())
         .and(with_event_sender.clone())
         .and(with_db_client.clone())
-        .and_then(start_cast_handle);
+        .and_then(start_cast_handler);
 
     let stop_cast = warp::path!("stop_cast")
         .and(warp::post())
