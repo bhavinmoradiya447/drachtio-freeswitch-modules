@@ -61,11 +61,11 @@ static COUNTER: AtomicUsize = AtomicUsize::new(0);
 pub async fn start_http_server(
     uuid_channels: Arc<Mutex<UuidChannels>>,
     event_sender: UnboundedSender<String>,
-    db_client: DbClient,
+    db_client: Arc<DbClient>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let with_uuid_channel = warp::any().map(move || Arc::clone(&uuid_channels));
     let with_event_sender = warp::any().map(move || event_sender.clone());
-    let with_db_client = warp::any().map(move || db_client);
+    let with_db_client = warp::any().map(move || db_client.clone());
 
     let address_client = Arc::new(Mutex::new(AddressClients::default()));
     let with_address_client = warp::any().map(move || Arc::clone(&address_client));
@@ -196,7 +196,7 @@ async fn start_cast_handler(
     channels: Arc<Mutex<UuidChannels>>,
     address_client: Arc<Mutex<AddressClients>>,
     event_sender: UnboundedSender<String>,
-    db_client: DbClient,
+    db_client: Arc<DbClient>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let count = COUNTER.fetch_add(1, SeqCst);
     let uuid = request.uuid.clone();
@@ -253,10 +253,14 @@ async fn start_cast_handler(
     }.sender.clone();
     let metadata_clone = metadata.clone();
     let mut receiver = channel.subscribe();
+    let db_client_clone = db_client.clone();
     tokio::spawn(async move {
         info!("init payload stream for uuid: {} to: {}", uuid, address);
         let address_clone = address.clone();
         let uuid_clone = uuid.clone();
+        let db_client_1 = db_client_clone.clone();
+        let db_client_2 = db_client_clone.clone();
+
         let payload_stream = async_stream::stream! {
             while let Ok(mut addr_payload) = receiver.recv().await {
                 let payload_type = addr_payload.payload.payload_type;
@@ -273,7 +277,7 @@ async fn start_cast_handler(
                         if Path::new(file_path.as_str()).exists() {
                          std::fs::remove_dir_all(file_path).expect("Failed to remove Directory");
                         }
-                        db_client.delete_by_call_leg_and_client_address(uuid.clone(), address.clone());
+                        db_client_1.delete_by_call_leg_and_client_address(uuid.clone(), address.clone());
                     }
                     break;
                 }
@@ -304,7 +308,7 @@ async fn start_cast_handler(
                                                                                address_clone.as_str(),
                                                                                data))
                                 .expect("Failed to send start success event");
-                            db_client.insert(CallDetails {
+                            db_client_2.insert(CallDetails {
                                 call_leg_id: uuid_clone.clone(),
                                 client_address: address_clone.clone(),
                                 codec: codec.clone(),
