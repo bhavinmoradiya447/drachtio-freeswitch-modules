@@ -513,7 +513,7 @@ async fn stop_all_handler(
     channels: Arc<Mutex<UuidChannels>>,
     event_sender: UnboundedSender<String>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    let channels = channels.lock().unwrap();
+    let mut channels = channels.lock().unwrap();
 
     for (uuid, value) in channels.uuid_sender_map.drain() {
         let payload = DialogRequestPayload {
