@@ -71,6 +71,15 @@ pub async fn start_http_server(
     let address_client = Arc::new(Mutex::new(AddressClients::default()));
     let with_address_client = warp::any().map(move || Arc::clone(&address_client));
 
+    let db_client_clone = db_client.clone();
+
+    let call_details = db_client_clone.select_all();
+
+    for call_detail in call_details.iter() {
+        start_cast(uuid_channels.clone(), address_client.clone(), event_sender.clone(), db_client.clone(), call_detail.call_leg_id.clone(),
+                   call_detail.client_address.clone(), call_detail.codec.clone(), call_detail.mode.clone(), call_detail.metadata.clone(), false);
+    }
+
     let start_cast = warp::path!("start_cast")
         .and(warp::post())
         .and(warp::body::json())
@@ -212,16 +221,14 @@ async fn start_cast_handler(
     let codec = request.codec.unwrap_or("mulaw".to_string());
     let mode = request.mode.unwrap_or("combined".to_string());
     let metadata = request.metadata.unwrap_or("".to_string()).clone();
-
-    start_cast(channels, address_client, event_sender, db_client, uuid, address, codec, mode, metadata);
-
+    start_cast(channels, address_client, event_sender, db_client, uuid, address, codec, mode, metadata, true);
     info!("returning ok");
     Ok(warp::reply::json(&"ok"))
 }
 
 fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<AddressClients>>,
               event_sender: UnboundedSender<String>, db_client: Arc<DbClient>, uuid: String,
-              address: String, codec: String, mode: String, metadata: String) {
+              address: String, codec: String, mode: String, metadata: String, insert_to_db: bool) {
     let count = COUNTER.fetch_add(1, SeqCst);
     let mode_clone = mode.clone();
     let uuid_clone = uuid.clone();
@@ -331,13 +338,15 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                                                                address_clone.as_str(),
                                                                                data))
                                 .expect("Failed to send start success event");
-                            db_client_2.insert(CallDetails {
-                                call_leg_id: uuid_clone.clone(),
-                                client_address: address_clone.clone(),
-                                codec: codec.clone(),
-                                mode: mode_clone.clone(),
-                                metadata: metadata.clone(),
-                            })
+                            if insert_to_db {
+                                db_client_2.insert(CallDetails {
+                                    call_leg_id: uuid_clone.clone(),
+                                    client_address: address_clone.clone(),
+                                    codec: codec.clone(),
+                                    mode: mode_clone.clone(),
+                                    metadata: metadata.clone(),
+                                });
+                            }
                         }
                         is_first_message = false;
                         if payload.payload_type == eval1(&DialogResponsePayloadType::ResponseEnd) {
