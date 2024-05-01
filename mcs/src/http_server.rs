@@ -64,20 +64,26 @@ pub async fn start_http_server(
     event_sender: UnboundedSender<String>,
     db_client: Arc<DbClient>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let uuid_channels_clone = uuid_channels.clone();
+    let event_sender_clone = event_sender.clone();
+    let db_client_clone = db_client.clone();
+
+
     let with_uuid_channel = warp::any().map(move || Arc::clone(&uuid_channels));
     let with_event_sender = warp::any().map(move || event_sender.clone());
     let with_db_client = warp::any().map(move || db_client.clone());
 
     let address_client = Arc::new(Mutex::new(AddressClients::default()));
+    let address_client_clone = address_client.clone();
     let with_address_client = warp::any().map(move || Arc::clone(&address_client));
 
-    let db_client_clone = db_client.clone();
 
     let call_details = db_client_clone.select_all();
 
     for call_detail in call_details.iter() {
-        start_cast(uuid_channels.clone(), address_client.clone(), event_sender.clone(), db_client.clone(), call_detail.call_leg_id.clone(),
-                   call_detail.client_address.clone(), call_detail.codec.clone(), call_detail.mode.clone(), call_detail.metadata.clone(), false);
+        start_cast(uuid_channels_clone.clone(), address_client_clone.clone(), event_sender_clone.clone(), db_client_clone.clone(),
+                   call_detail.call_leg_id.clone(), call_detail.client_address.clone(), call_detail.codec.clone(),
+                   call_detail.mode.clone(), call_detail.metadata.clone(), false);
     }
 
     let start_cast = warp::path!("start_cast")
