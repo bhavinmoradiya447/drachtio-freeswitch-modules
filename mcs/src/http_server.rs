@@ -207,13 +207,25 @@ async fn start_cast_handler(
     event_sender: UnboundedSender<String>,
     db_client: Arc<DbClient>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    let count = COUNTER.fetch_add(1, SeqCst);
     let uuid = request.uuid.clone();
     let address = request.address.clone();
     let codec = request.codec.unwrap_or("mulaw".to_string());
     let mode = request.mode.unwrap_or("combined".to_string());
-    let mode_clone = mode.clone();
     let metadata = request.metadata.unwrap_or("".to_string()).clone();
+
+    start_cast(channels, address_client, event_sender, db_client, uuid, address, codec, mode, metadata);
+
+    info!("returning ok");
+    Ok(warp::reply::json(&"ok"))
+}
+
+fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<AddressClients>>,
+              event_sender: UnboundedSender<String>, db_client: Arc<DbClient>, uuid: String,
+              address: String, codec: String, mode: String, metadata: String) {
+    let count = COUNTER.fetch_add(1, SeqCst);
+    let mode_clone = mode.clone();
+    let uuid_clone = uuid.clone();
+    let address_clone = address.clone();
     let group = (count / CONFIG.http_server.grpc_connection_pool) % CONFIG.http_server.grpc_connection_pool;
     let address_key = format!("{}-{}", address, group);
     let address_uri = Uri::try_from(&address).unwrap();
@@ -347,17 +359,14 @@ async fn start_cast_handler(
     });
 
     if let Err(e) = channel.send(AddressPayload::new(
-        request.uuid.clone(),
+        uuid_clone.clone(),
         DialogRequestPayloadType::AudioStart.into(),
-        request.address.clone(),
+        address_clone.clone(),
         metadata_clone,
     )) {
         info!("failed to send to channel; error = {:?}", e);
         //return Err(warp::reject());
     }
-
-    info!("returning ok");
-    Ok(warp::reply::json(&"ok"))
 }
 
 fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponsePayload, event_sender: UnboundedSender<String>) {
