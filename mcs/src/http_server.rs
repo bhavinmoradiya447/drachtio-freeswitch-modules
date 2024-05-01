@@ -20,6 +20,7 @@ use warp::{
     Filter, Rejection, Reply,
 };
 use std::path::Path;
+use warp::header::value;
 
 pub mod mcs {
     tonic::include_proto!("mcs");
@@ -86,6 +87,12 @@ pub async fn start_http_server(
         .and(with_event_sender.clone())
         .and_then(stop_cast_handler);
 
+    let stop_all = warp::path!("stop_all")
+        .and(warp::post())
+        .and(with_uuid_channel.clone())
+        .and(with_event_sender.clone())
+        .and_then(stop_all_handler);
+
     let dispatch_event = warp::path!("dispatch_event")
         .and(warp::post())
         .and(warp::body::json())
@@ -102,6 +109,7 @@ pub async fn start_http_server(
         .or(ping)
         .or(start_cast)
         .or(stop_cast)
+        .or(stop_all)
         .or(dispatch_event);
 
     info!("starting http server");
@@ -116,6 +124,7 @@ fn init_open_api() -> impl Filter<Extract=(impl Reply, ), Error=warp::Rejection>
     crate::http_server::start_cast_handler,
     crate::http_server::dispatch_event_handler,
     crate::http_server::stop_cast_handler,
+    crate::http_server::stop_all_handler,
     crate::http_server::ping_handler,
     ),
     components(
@@ -235,7 +244,7 @@ async fn start_cast_handler(
             grpc_client
         }
     };
-
+    let channels_clone = channels.clone();
     let mut channels = channels.lock().unwrap();
     let channel = match channels.uuid_sender_map.get(&uuid) {
         Some(channel) => channel.clone(),
@@ -278,6 +287,8 @@ async fn start_cast_handler(
                          std::fs::remove_dir_all(file_path).expect("Failed to remove Directory");
                         }
                         db_client_1.delete_by_call_leg_and_client_address(uuid.clone(), address.clone());
+                        let mut channels_ = channels_clone.lock().unwrap();
+                        channels_.uuid_sender_map.remove(uuid.as_str());
                     }
                     break;
                 }
@@ -452,7 +463,7 @@ struct StopCastRequest {
 async fn stop_cast_handler(
     request: StopCastRequest,
     channels: Arc<Mutex<UuidChannels>>,
-    event_sender: UnboundedSender<String>
+    event_sender: UnboundedSender<String>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let uuid = request.uuid;
     let address = request.address;
@@ -495,6 +506,33 @@ async fn stop_cast_handler(
     }
     Ok(warp::reply::json(&"ok"))
 }
+
+#[utoipa::path(post, path = "/stop_all")]
+#[instrument(name = "stop_all", skip(channels))]
+async fn stop_all_handler(
+    channels: Arc<Mutex<UuidChannels>>,
+    event_sender: UnboundedSender<String>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let channels = channels.lock().unwrap();
+
+    for (uuid, value) in channels.uuid_sender_map.drain() {
+        let payload = DialogRequestPayload {
+            uuid: uuid.clone(),
+            payload_type: DialogRequestPayloadType::AudioEnd.into(),
+            ..Default::default()
+        };
+
+        if let Err(e) = value.sender.send(AddressPayload {
+            payload,
+            ..Default::default()
+        }) {
+            info!("failed to Hard Stop for {} error = {:?}", uuid.clone(), e);
+        }
+        info!("Successfully hard Stopped cast for {} ", uuid.clone());
+    }
+    Ok(warp::reply::json(&"ok"))
+}
+
 
 #[utoipa::path(get, path = "/ping")]
 #[instrument(name = "ping")]

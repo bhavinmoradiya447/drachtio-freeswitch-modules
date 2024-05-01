@@ -40,7 +40,7 @@ impl DbClient {
         match self.connection.execute(query)
         {
             Ok(()) => info!("Successfully inserted {} , {}", call_details.call_leg_id, call_details.client_address),
-            Err(e) => error!("Failed to insert {} , {}, Error: {}", call_details.call_leg_id, call_details.client_address, e)
+            Err(e) => error!("Failed to insert {} , {}, Error:  {:?}", call_details.call_leg_id, call_details.client_address, e)
         }
     }
 
@@ -50,7 +50,7 @@ impl DbClient {
                             client_address);
         match self.connection.execute(query) {
             Ok(()) => info!("Successfully deleted {} , {}", call_leg_id, client_address),
-            Err(e) => error!("Failed to delete {} , {}, Error: {}", call_leg_id, client_address, e)
+            Err(e) => error!("Failed to delete {} , {}, Error:  {:?}", call_leg_id, client_address, e)
         }
     }
 
@@ -59,7 +59,7 @@ impl DbClient {
                             call_leg_id);
         match self.connection.execute(query) {
             Ok(()) => info!("Successfully deleted {} ", call_leg_id),
-            Err(e) => error!("Failed to delete {} , Error: {}", call_leg_id, e)
+            Err(e) => error!("Failed to delete {} , Error:  {:?}", call_leg_id, e)
         }
     }
 
@@ -81,7 +81,7 @@ impl DbClient {
                 true
             }) {
             Ok(()) => info!("Successfully executed select query"),
-            Err(e) => error!("Failed to execute select, Error: {}", e)
+            Err(e) => error!("Failed to execute select, Error:  {:?}", e)
         }
 
         info!("Select query return {} rows, values: {:?}", call_details.len(), call_details);
