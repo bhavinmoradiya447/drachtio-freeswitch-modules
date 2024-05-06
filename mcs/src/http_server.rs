@@ -20,6 +20,8 @@ use warp::{
     Filter, Rejection, Reply,
 };
 use std::path::Path;
+use std::time::Duration;
+use tokio::time::sleep;
 use warp::header::value;
 
 pub mod mcs {
@@ -363,7 +365,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                 }
                                 process_response_payload(uuid_clone.as_str(), address_clone.as_str(), &payload, event_sender1.clone());
                             }
-                            Ok(None) => info!("Got None"),
+                            Ok(None) => sleep(Duration::from_millis(1000)).await,
                             Err(e) => {
                                 error!("Got Error during reading response stream {:?}", e);
                                 break;
