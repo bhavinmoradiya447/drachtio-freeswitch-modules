@@ -14,7 +14,7 @@ pub async fn start_udp_server(
     // get socket path from the config
     let socket_path = CONFIG.udp_server.socket_file.clone();
     // delete the socket file if it already exists
-    // tokio::fs::remove_file(socket_path.clone()).await.ok();
+    tokio::fs::remove_file(socket_path.clone()).await.ok();
     info!("binding to socket: {}", socket_path);
     // bind to the socket log on error
     let socket = UnixDatagram::bind(socket_path)?;
