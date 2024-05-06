@@ -1,4 +1,4 @@
-use sqlite::{Connection, ConnectionThreadSafe};
+use sqlite::{Connection, ConnectionThreadSafe, Value};
 use tracing::{error, info};
 
 #[derive(Debug, Default)]
@@ -34,31 +34,43 @@ impl DbClient {
     }
 
     pub fn insert(&self, call_details: CallDetails) {
-        let query = format!("INSERT into CALL_DETAILS values(\"{}\",\"{}\",\"{}\",\"{}\",\"{}\")",
-                            call_details.call_leg_id,
-                            call_details.client_address, call_details.codec, call_details.mode, call_details.metadata);
-        match self.connection.execute(query)
+        let mut stmt = self.connection.prepare("INSERT into CALL_DETAILS values(:callId,:address,:codec,:mode,:metadata)").unwrap();
+
+        stmt.bind_iter::<_, (_, Value)>([
+            (":callId", call_details.call_leg_id.into()),
+            (":address", call_details.client_address.into()),
+            (":codec", call_details.codec.into()),
+            (":mode", call_details.mode.into()),
+            (":metadata", call_details.metadata.into())
+        ]).unwrap();
+        match stmt.next()
         {
-            Ok(()) => info!("Successfully inserted {} , {}", call_details.call_leg_id, call_details.client_address),
+            Ok(state) => info!("Insert entry {} , {} is {:?}", call_details.call_leg_id, call_details.client_address, state),
             Err(e) => error!("Failed to insert {} , {}, Error:  {:?}", call_details.call_leg_id, call_details.client_address, e)
         }
     }
 
     pub fn delete_by_call_leg_and_client_address(&self, call_leg_id: String, client_address: String) {
-        let query = format!("DELETE from CALL_DETAILS where CALL_LEG_ID=\"{}\" and CLIENT_ADDRESS=\"{}\"",
-                            call_leg_id,
-                            client_address);
-        match self.connection.execute(query) {
-            Ok(()) => info!("Successfully deleted {} , {}", call_leg_id, client_address),
+        let mut stmt =
+            self.connection.prepare("DELETE from CALL_DETAILS where CALL_LEG_ID= :callId and CLIENT_ADDRESS= :address").unwrap();
+
+        stmt.bind_iter::<_, (_, Value)>([(":callId", call_leg_id.into()),
+            (":address", client_address.into())]).unwrap();
+
+        match stmt.next() {
+            Ok(state) => info!("Deleting entry for {} , {} is {:?}", call_leg_id, client_address, state),
             Err(e) => error!("Failed to delete {} , {}, Error:  {:?}", call_leg_id, client_address, e)
         }
     }
 
     pub fn delete_by_call_leg_id(&self, call_leg_id: String) {
-        let query = format!("DELETE from CALL_DETAILS where CALL_LEG_ID=\"{}\"",
-                            call_leg_id);
-        match self.connection.execute(query) {
-            Ok(()) => info!("Successfully deleted {} ", call_leg_id),
+        let mut stmt =
+            self.connection.prepare("DELETE from CALL_DETAILS where CALL_LEG_ID= :callId").unwrap();
+
+        stmt.bind_iter::<_, (_, Value)>([(":callId", call_leg_id.into())]).unwrap();
+
+        match stmt.next() {
+            Ok(state) => info!("Deleting entry for {}  is {:?}", call_leg_id, state),
             Err(e) => error!("Failed to delete {} , Error:  {:?}", call_leg_id, e)
         }
     }
