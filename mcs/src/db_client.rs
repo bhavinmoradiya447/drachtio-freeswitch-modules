@@ -37,11 +37,11 @@ impl DbClient {
         let mut stmt = self.connection.prepare("INSERT into CALL_DETAILS values(:callId,:address,:codec,:mode,:metadata)").unwrap();
 
         stmt.bind_iter::<_, (_, Value)>([
-            (":callId", call_details.call_leg_id.into()),
-            (":address", call_details.client_address.into()),
-            (":codec", call_details.codec.into()),
-            (":mode", call_details.mode.into()),
-            (":metadata", call_details.metadata.into())
+            (":callId", call_details.call_leg_id.clone().into()),
+            (":address", call_details.client_address.clone().into()),
+            (":codec", call_details.codec.clone().into()),
+            (":mode", call_details.mode.clone().into()),
+            (":metadata", call_details.metadata.clone().into())
         ]).unwrap();
         match stmt.next()
         {
@@ -54,8 +54,8 @@ impl DbClient {
         let mut stmt =
             self.connection.prepare("DELETE from CALL_DETAILS where CALL_LEG_ID= :callId and CLIENT_ADDRESS= :address").unwrap();
 
-        stmt.bind_iter::<_, (_, Value)>([(":callId", call_leg_id.into()),
-            (":address", client_address.into())]).unwrap();
+        stmt.bind_iter::<_, (_, Value)>([(":callId", call_leg_id.clone().into()),
+            (":address", client_address.clone().into())]).unwrap();
 
         match stmt.next() {
             Ok(state) => info!("Deleting entry for {} , {} is {:?}", call_leg_id, client_address, state),
@@ -67,7 +67,7 @@ impl DbClient {
         let mut stmt =
             self.connection.prepare("DELETE from CALL_DETAILS where CALL_LEG_ID= :callId").unwrap();
 
-        stmt.bind_iter::<_, (_, Value)>([(":callId", call_leg_id.into())]).unwrap();
+        stmt.bind_iter::<_, (_, Value)>([(":callId", call_leg_id.clone().into())]).unwrap();
 
         match stmt.next() {
             Ok(state) => info!("Deleting entry for {}  is {:?}", call_leg_id, state),
