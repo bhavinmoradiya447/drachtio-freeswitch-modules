@@ -224,10 +224,6 @@ switch_status_t audio_cast_session_cleanup(switch_core_session_t *session, char 
         p->timestamp = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
         p->size = 0;
         p->buf =  NULL;
-        p->left_buf = NULL;
-        p->right_buf = NULL; 
-        p->left_size = 0;
-        p->right_size = 0;
         dispatcher *disp = static_cast<dispatcher *>(tech_pvt->disp);
         disp->dispatch(p);
         disp->stop();
@@ -298,22 +294,15 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
     return SWITCH_STATUS_SUCCESS;
   }
 
-  switch_bool_t convert_linear2_g711_pcmu8k(char* frame, uint32_t* framelen, char* left, char* right) {
+  switch_bool_t convert_linear2_g711_pcmu8k(char* frame, uint32_t* framelen) {
       short *inbuf = (short *)frame;
       uint32_t in_data_len = *framelen;
       uint32_t outBufSize = in_data_len / sizeof(short);
       unsigned char* obuf = (unsigned char*)  malloc(outBufSize);
       uint32_t i;
-      uint32_t l=0;
-      uint32_t r=0;
-      
+
       for (i = 0; i < outBufSize; i++) {
           obuf[i] = linear_to_ulaw(inbuf[i]);
-          if(i % 2 == 0) {
-            left[l++] = obuf[i];
-          }else{
-            right[r++] = obuf[i];
-          }
       }
       memcpy(frame, obuf, outBufSize);
       *framelen = i;
@@ -333,11 +322,6 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
         frame.buflen = SWITCH_RECOMMENDED_BUFFER_SIZE;
         
         while (switch_core_media_bug_read(bug, &frame, SWITCH_TRUE) == SWITCH_STATUS_SUCCESS) {
-          uint32_t per_channel_datalen;
-          unsigned char* left;
-          unsigned char* right;
-          
-          
           if( tech_pvt->audio_masked ) { 
              unsigned char null_data[SWITCH_RECOMMENDED_BUFFER_SIZE] = {0};
             memcpy(frame.data, null_data, frame.datalen);
@@ -354,22 +338,14 @@ switch_status_t audio_cast_session_maskunmask(switch_core_session_t *session, ch
             frame.datalen = new_len;
           }
 
-          
-          per_channel_datalen = frame.datalen / 2 / sizeof(short);
-          left = (unsigned char*)  malloc(per_channel_datalen);
-          right = (unsigned char*)  malloc(per_channel_datalen);
-          convert_linear2_g711_pcmu8k((char *)frame.data, &frame.datalen, (char *)left, (char *)right);
-          
+
+          convert_linear2_g711_pcmu8k((char *)frame.data, &frame.datalen);
           payload * p = new payload;
           uuid_parse(tech_pvt->sessionId, p->id);
           p->seq = tech_pvt->seq++;
           p->timestamp = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
           p->size = frame.datalen;
           p->buf =  static_cast<char *>(frame.data);
-          p->left_size = per_channel_datalen;
-          p->right_size = per_channel_datalen;
-          p->left_buf = (char *)left;
-          p->right_buf = (char *)right;
           dispatcher *disp = static_cast<dispatcher *>(tech_pvt->disp);
           disp->dispatch(p);
           delete p;

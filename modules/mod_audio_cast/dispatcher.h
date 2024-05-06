@@ -22,11 +22,7 @@ struct payload {
     unsigned int seq;
     unsigned long timestamp;
     unsigned int size;
-    unsigned int left_size;
-    unsigned int right_size;
     char * buf;
-    char * left_buf;
-    char * right_buf;
 };
 
 class dispatcher {
@@ -36,16 +32,12 @@ class dispatcher {
         struct sockaddr_un remote;
         int batch_size = 1;
         char *batch_buf = nullptr;
-        char *batch_left_buf = nullptr;
-        char *batch_right_buf = nullptr;
         unsigned int seq = 0;
         int batch_buf_len = 0;
-        int batch_left_buf_len = 0;
-        int batch_right_buf_len = 0;
         char * call_uuid;
-        void write_to_ds(int fd, char * buf, int size);
+        void write_to_ds(int fd, char * buf);
         char* concat(char* a, size_t a_size,char* b, size_t b_size);
-        void dispatch_to_ds(char* buf, int size, uuid_t id, int seq, unsigned long timestamp, char* left_buf, int left_size, char* right_buf, int right_size);
+        void dispatch_to_ds(char* buf, int size, uuid_t id, int seq, unsigned long timestamp);
     public:
         dispatcher(char * uuid);
         ~dispatcher();
