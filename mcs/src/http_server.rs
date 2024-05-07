@@ -334,17 +334,6 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         let response = client.dialog(request).await.unwrap();
         let mut resp_stream = response.into_inner();
 
-        loop {
-            match resp_stream.next().await {
-                None => {info!("\t ---  received None");}
-                Some(received) => {
-                    match received {
-                        Ok(t) => {info!("\t ---  received message: `{}`", t.data);}
-                        Err(e) => {error!(" -- Recieved error `{:?}`", e);}
-                    }
-                }
-            }
-        }
         while let Some(received) = resp_stream.next().await {
             match received {
                 Ok(t) => {info!("\t ---  received message: `{}`", t.data);}
