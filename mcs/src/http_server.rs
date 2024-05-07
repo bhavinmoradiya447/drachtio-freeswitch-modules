@@ -22,6 +22,7 @@ use warp::{
 use std::path::Path;
 use std::time::Duration;
 use tokio::time::sleep;
+use tonic::codegen::tokio_stream::StreamExt;
 use warp::header::value;
 
 pub mod mcs {
@@ -329,16 +330,19 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         };
         let request = tonic::Request::new(payload_stream);
         let event_sender1 = event_sender.clone();
+
         match client.dialog(request).await {
             Ok(response) => {
+
                 tokio::spawn(async move {
                     let mut is_first_message = true;
 
+
                     let mut response = response.into_inner();
 
-                    loop {
-                        match response.message().await {
-                            Ok(Some(payload)) => {
+                    while let Some(received) = response.next().await {
+                        match received {
+                            Ok(payload) => {
                                 if is_first_message && payload.payload_type == eval1(&DialogResponsePayloadType::DialogEnd) {
                                     event_sender1.send(get_start_failed_event_command(uuid_clone.as_str(),
                                                                                       address_clone.as_str(),
@@ -370,7 +374,6 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                 }
                                 process_response_payload(uuid_clone.as_str(), address_clone.as_str(), &payload, event_sender1.clone());
                             }
-                            Ok(None) => sleep(Duration::from_millis(1000)).await,
                             Err(e) => {
                                 error!("Got Error during reading response stream {:?}", e);
                                 break;
