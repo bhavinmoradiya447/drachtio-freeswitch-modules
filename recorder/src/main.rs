@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fs::File, io::Write};
+use std::time::Duration;
 use tokio;
+use tokio::time::sleep;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 
@@ -84,14 +86,17 @@ impl MediaCastService for MediaCastServiceImpl {
         // create a receiver stream to return
         let (tx, rx) = tokio::sync::mpsc::channel(4);
         tokio::spawn(async move {
-            let response = DialogResponsePayload {
-                payload_type: <DialogResponsePayloadType as Into<i32>>::into(
-                    DialogResponsePayloadType::ResponseEnd,
-                ),
-                audio: Vec::new(),
-                data: String::from("recording started"),
-            };
-            tx.send(Ok(response)).await.unwrap();
+            for i in 1..10000 {
+                let response = DialogResponsePayload {
+                    payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                        DialogResponsePayloadType::Event,
+                    ),
+                    audio: Vec::new(),
+                    data: String::from("recording started"),
+                };
+                tx.send(Ok(response)).await.unwrap();
+                sleep(Duration::from_secs(1)).await;
+            }
         });
 
         Ok(Response::new(ReceiverStream::new(rx)))
