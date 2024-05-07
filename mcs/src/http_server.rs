@@ -298,26 +298,31 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         let db_client_2 = db_client_clone.clone();
 
         let payload_stream = async_stream::stream! {
-            while let Ok(mut addr_payload) = receiver.recv().await {
-                let payload_type = addr_payload.payload.payload_type;
-                process_payload(&mut addr_payload.payload, mode.clone());
-                if payload_type == eval(&DialogRequestPayloadType::AudioStart) && address.clone() != addr_payload.address {
-                    continue;
-                }
-                yield addr_payload.payload;
-                if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
-                    || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address.clone() == addr_payload.address) {
-                    info!("done streaming for uuid: {} to: {}", uuid.clone(), address.clone());
-                    if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
-                        let file_path = format!("/tmp/{}", uuid.clone());
-                        if Path::new(file_path.as_str()).exists() {
-                         std::fs::remove_dir_all(file_path).expect("Failed to remove Directory");
+            loop {
+                match receiver.recv().await {
+                    Ok(mut addr_payload) => {
+                        let payload_type = addr_payload.payload.payload_type;
+                        process_payload(&mut addr_payload.payload, mode.clone());
+                        if payload_type == eval(&DialogRequestPayloadType::AudioStart) && address.clone() != addr_payload.address {
+                            continue;
                         }
-                        db_client_1.delete_by_call_leg_and_client_address(uuid.clone(), address.clone());
-                        let mut channels_ = channels_clone.lock().unwrap();
-                        channels_.uuid_sender_map.remove(uuid.as_str());
+                        yield addr_payload.payload;
+                        if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
+                            || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address.clone() == addr_payload.address) {
+                            info!("done streaming for uuid: {} to: {}", uuid.clone(), address.clone());
+                            if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
+                                let file_path = format!("/tmp/{}", uuid.clone());
+                                if Path::new(file_path.as_str()).exists() {
+                                 std::fs::remove_dir_all(file_path).expect("Failed to remove Directory");
+                                }
+                                db_client_1.delete_by_call_leg_and_client_address(uuid.clone(), address.clone());
+                                let mut channels_ = channels_clone.lock().unwrap();
+                                channels_.uuid_sender_map.remove(uuid.as_str());
+                            }
+                            break;
+                        }
                     }
-                    break;
+                    Err(e) => error!("Failed to receive {:?}", e);
                 }
             }
 
