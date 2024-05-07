@@ -235,9 +235,9 @@ async fn start_cast_handler(
     Ok(warp::reply::json(&"ok"))
 }
 
-fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<AddressClients>>,
-              event_sender: UnboundedSender<String>, db_client: Arc<DbClient>, uuid: String,
-              address: String, codec: String, mode: String, metadata: String, insert_to_db: bool) {
+async fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<AddressClients>>,
+                    event_sender: UnboundedSender<String>, db_client: Arc<DbClient>, uuid: String,
+                    address: String, codec: String, mode: String, metadata: String, insert_to_db: bool) {
     let count = COUNTER.fetch_add(1, SeqCst);
     let mode_clone = mode.clone();
     let uuid_clone = uuid.clone();
@@ -403,6 +403,11 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
             }
         }; */
     });
+
+    if let Err(e) = hand.await {
+        info!("failed to send to channel; error = {:?}", e);
+        //return Err(warp::reject());
+    }
 
     if let Err(e) = channel.send(AddressPayload::new(
         uuid_clone.clone(),
