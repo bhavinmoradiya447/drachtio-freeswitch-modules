@@ -331,7 +331,15 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         let request = tonic::Request::new(payload_stream);
         let event_sender1 = event_sender.clone();
 
-        match client.dialog(request).await {
+        let response = client.dialog(request).await.unwrap();
+        let mut resp_stream = response.into_inner();
+
+        while let Some(received) = resp_stream.next().await {
+            let received = received.unwrap();
+            info!("\t ---  received message: `{}`", received.data);
+        }
+
+        /*match client.dialog(request).await {
             Ok(response) => {
 
                 tokio::spawn(async move {
@@ -390,7 +398,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                                                  "connection-failed"))
                     .expect("Failed to send start failed event");
             }
-        };
+        }; */
     });
 
     if let Err(e) = channel.send(AddressPayload::new(
