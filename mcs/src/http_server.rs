@@ -291,7 +291,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
     let metadata_clone = metadata.clone();
     let mut receiver = channel.subscribe();
     let db_client_clone = db_client.clone();
-    tokio::spawn(async move {
+    let hand = tokio::spawn(async move {
         info!("init payload stream for uuid: {} to: {}", uuid, address);
         let address_clone = address.clone();
         let uuid_clone = uuid.clone();
@@ -335,8 +335,11 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         let mut resp_stream = response.into_inner();
 
         while let Some(received) = resp_stream.next().await {
-            let received = received.unwrap();
-            info!("\t ---  received message: `{}`", received.data);
+            match received {
+                Ok(t) => {info!("\t ---  received message: `{}`", t.data);}
+                Err(e) => {error!(" -- Recieved error `{:?}`", e);}
+            }
+
         }
 
         /*match client.dialog(request).await {
