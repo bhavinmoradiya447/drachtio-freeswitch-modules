@@ -230,14 +230,14 @@ async fn start_cast_handler(
     let codec = request.codec.unwrap_or("mulaw".to_string());
     let mode = request.mode.unwrap_or("combined".to_string());
     let metadata = request.metadata.unwrap_or("".to_string()).clone();
-    start_cast(channels, address_client, event_sender, db_client, uuid, address, codec, mode, metadata, true);
+    start_cast(channels, address_client, event_sender, db_client, uuid, address, codec, mode, metadata, true).await;
     info!("returning ok");
     Ok(warp::reply::json(&"ok"))
 }
 
-fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<AddressClients>>,
-              event_sender: UnboundedSender<String>, db_client: Arc<DbClient>, uuid: String,
-              address: String, codec: String, mode: String, metadata: String, insert_to_db: bool) {
+async fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<AddressClients>>,
+                    event_sender: UnboundedSender<String>, db_client: Arc<DbClient>, uuid: String,
+                    address: String, codec: String, mode: String, metadata: String, insert_to_db: bool) {
     let count = COUNTER.fetch_add(1, SeqCst);
     let mode_clone = mode.clone();
     let uuid_clone = uuid.clone();
