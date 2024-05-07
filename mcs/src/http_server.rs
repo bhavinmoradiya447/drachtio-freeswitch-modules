@@ -322,7 +322,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                             break;
                         }
                     }
-                    Err(e) => error!("Failed to receive {:?}", e);
+                    Err(e) => error!("Failed to receive {:?}", e)
                 }
             }
 
