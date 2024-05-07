@@ -292,7 +292,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
     let mut receiver = channel.subscribe();
     let db_client_clone = db_client.clone();
 
-    std::thread::spawn(async || {
+    std::thread::spawn(async {
         info!("init payload stream for uuid: {} to: {}", uuid, address);
         let address_clone = address.clone();
         let uuid_clone = uuid.clone();
