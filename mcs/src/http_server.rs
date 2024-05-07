@@ -291,7 +291,8 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
     let metadata_clone = metadata.clone();
     let mut receiver = channel.subscribe();
     let db_client_clone = db_client.clone();
-    tokio::spawn(async move {
+
+    std::thread::spawn(async || {
         info!("init payload stream for uuid: {} to: {}", uuid, address);
         let address_clone = address.clone();
         let uuid_clone = uuid.clone();
