@@ -24,7 +24,6 @@ use std::time::Duration;
 use tokio::time::sleep;
 use tonic::codegen::tokio_stream::StreamExt;
 use warp::header::value;
-use log::info;
 
 pub mod mcs {
     tonic::include_proto!("mcs");
