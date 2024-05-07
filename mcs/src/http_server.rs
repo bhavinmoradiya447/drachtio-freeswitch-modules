@@ -24,6 +24,7 @@ use std::time::Duration;
 use tokio::time::sleep;
 use tonic::codegen::tokio_stream::StreamExt;
 use warp::header::value;
+use log::info;
 
 pub mod mcs {
     tonic::include_proto!("mcs");
@@ -236,8 +237,8 @@ async fn start_cast_handler(
 }
 
 fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<AddressClients>>,
-                    event_sender: UnboundedSender<String>, db_client: Arc<DbClient>, uuid: String,
-                    address: String, codec: String, mode: String, metadata: String, insert_to_db: bool) {
+              event_sender: UnboundedSender<String>, db_client: Arc<DbClient>, uuid: String,
+              address: String, codec: String, mode: String, metadata: String, insert_to_db: bool) {
     let count = COUNTER.fetch_add(1, SeqCst);
     let mode_clone = mode.clone();
     let uuid_clone = uuid.clone();
@@ -292,14 +293,15 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
     let mut receiver = channel.subscribe();
     let db_client_clone = db_client.clone();
 
-    std::thread::spawn(|| { async move {
-        info!("init payload stream for uuid: {} to: {}", uuid, address);
-        let address_clone = address.clone();
-        let uuid_clone = uuid.clone();
-        let db_client_1 = db_client_clone.clone();
-        let db_client_2 = db_client_clone.clone();
+    tokio::spawn(async move {
+        let t = tokio::spawn(async move {
+            info!("init payload stream for uuid: {} to: {}", uuid, address);
+            let address_clone = address.clone();
+            let uuid_clone = uuid.clone();
+            let db_client_1 = db_client_clone.clone();
+            let db_client_2 = db_client_clone.clone();
 
-        let payload_stream = async_stream::stream! {
+            let payload_stream = async_stream::stream! {
             loop {
                 match receiver.recv().await {
                     Ok(mut addr_payload) => {
@@ -329,21 +331,20 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
             }
 
         };
-        let request = tonic::Request::new(payload_stream);
-        let event_sender1 = event_sender.clone();
+            let request = tonic::Request::new(payload_stream);
+            let event_sender1 = event_sender.clone();
 
-        let response = client.dialog(request).await.unwrap();
-        let mut resp_stream = response.into_inner();
+            let response = client.dialog(request).await.unwrap();
+            let mut resp_stream = response.into_inner();
 
-        while let Some(received) = resp_stream.next().await {
-            match received {
-                Ok(t) => {info!("\t ---  received message: `{}`", t.data);}
-                Err(e) => {error!(" -- Recieved error `{:?}`", e);}
+            while let Some(received) = resp_stream.next().await {
+                match received {
+                    Ok(t) => { info!("\t ---  received message: `{}`", t.data); }
+                    Err(e) => { error!(" -- Recieved error `{:?}`", e); }
+                }
             }
 
-        }
-
-        /*match client.dialog(request).await {
+            /*match client.dialog(request).await {
             Ok(response) => {
 
                 tokio::spawn(async move {
@@ -403,7 +404,12 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                     .expect("Failed to send start failed event");
             }
         }; */
-    }});
+        });
+        match t.await {
+            Ok(_) => { info!("Success") }
+            Err(e) => { error!("Got ERROR {:?}", e) }
+        }
+    });
 
     if let Err(e) = channel.send(AddressPayload::new(
         uuid_clone.clone(),

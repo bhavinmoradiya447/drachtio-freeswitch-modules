@@ -44,6 +44,7 @@ lazy_static = "1.4.0"
 
 # TcpStream
 stubborn-io = "0.3.4"
+log = "0.4.20"
 
 [build-dependencies]
 tonic-build = "0.10.2"
