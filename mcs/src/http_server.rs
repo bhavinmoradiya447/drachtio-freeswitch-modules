@@ -230,7 +230,7 @@ async fn start_cast_handler(
     let codec = request.codec.unwrap_or("mulaw".to_string());
     let mode = request.mode.unwrap_or("combined".to_string());
     let metadata = request.metadata.unwrap_or("".to_string()).clone();
-    start_cast(channels, address_client, event_sender, db_client, uuid, address, codec, mode, metadata, true).await;
+    let _ = start_cast(channels, address_client, event_sender, db_client, uuid, address, codec, mode, metadata, true);
     info!("returning ok");
     Ok(warp::reply::json(&"ok"))
 }
