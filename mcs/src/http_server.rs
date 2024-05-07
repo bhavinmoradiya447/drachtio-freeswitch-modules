@@ -230,7 +230,7 @@ async fn start_cast_handler(
     let codec = request.codec.unwrap_or("mulaw".to_string());
     let mode = request.mode.unwrap_or("combined".to_string());
     let metadata = request.metadata.unwrap_or("".to_string()).clone();
-    let _ = start_cast(channels, address_client, event_sender, db_client, uuid, address, codec, mode, metadata, true);
+    let a = start_cast(channels, address_client, event_sender, db_client, uuid, address, codec, mode, metadata, true);
     info!("returning ok");
     Ok(warp::reply::json(&"ok"))
 }
@@ -291,16 +291,7 @@ async fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mute
     let metadata_clone = metadata.clone();
     let mut receiver = channel.subscribe();
     let db_client_clone = db_client.clone();
-    if let Err(e) = channel.send(AddressPayload::new(
-        uuid_clone.clone(),
-        DialogRequestPayloadType::AudioStart.into(),
-        address_clone.clone(),
-        metadata_clone,
-    )) {
-        info!("failed to send to channel; error = {:?}", e);
-        //return Err(warp::reject());
-    }
-    //tokio::spawn(async move {
+    let hand = tokio::spawn(async move {
         info!("init payload stream for uuid: {} to: {}", uuid, address);
         let address_clone = address.clone();
         let uuid_clone = uuid.clone();
@@ -411,10 +402,20 @@ async fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mute
                     .expect("Failed to send start failed event");
             }
         }; */
-   // });
+    });
 
-
-
+    if let Err(e) = hand.await {
+        info!("----- error = {:?}", e);
+    }
+    if let Err(e) = channel.send(AddressPayload::new(
+        uuid_clone.clone(),
+        DialogRequestPayloadType::AudioStart.into(),
+        address_clone.clone(),
+        metadata_clone,
+    )) {
+        info!("failed to send to channel; error = {:?}", e);
+        //return Err(warp::reject());
+    }
 }
 
 fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponsePayload, event_sender: UnboundedSender<String>) {
