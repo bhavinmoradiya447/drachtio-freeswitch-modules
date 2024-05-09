@@ -28,7 +28,6 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio_util::sync::ReusableBoxFuture;
 use tonic::codegen::tokio_stream::{Stream, StreamExt};
-use warp::header::value;
 
 pub mod mcs {
     tonic::include_proto!("mcs");
@@ -299,7 +298,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
     let metadata_clone = metadata.clone();
     let receiver = channel.subscribe();
     let retry_clone = retry.clone();
-    let retry_clone = retry_clone.lock().unwrap();
+    let mut retry_clone = retry_clone.lock().unwrap();
     retry_clone.retry_count = retry_clone.retry_count + 1;
     let retry_clone = retry.clone();
     let mut retry_stream = CastStreamWithRetry::new(receiver,
@@ -316,7 +315,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
     );
 
     let db_client_clone = db_client.clone();
-    let mut retry_clone = retry.clone();
+    let retry_clone = retry.clone();
 
     tokio::spawn(async move {
         info!("init payload stream for uuid: {} to: {}", uuid, address);
@@ -694,7 +693,7 @@ impl<T: 'static + Clone + Send> Stream for CastStreamWithRetry<T> {
 
 impl<T> Drop for CastStreamWithRetry<T> {
     fn drop(&mut self) {
-        let retry = self.retry.lock().unwrap();
+        let mut retry = self.retry.lock().unwrap();
         if retry.retry_count != -1 && retry.retry_count < 4 {
             let duration = u64::pow(2, retry.retry_count.clone() as u32) * 100;
             sleep(Duration::from_millis(duration));
