@@ -296,19 +296,18 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
     }.sender.clone();
     let metadata_clone = metadata.clone();
     let receiver = channel.subscribe();
-    let retry_stream = CastStreamWithRetry::new(receiver,
-                                                channels_clone.clone(),
-                                                address_client_clone.clone(),
-                                                event_sender.clone(),
-                                                db_client.clone(),
-                                                uuid_clone.clone(),
-                                                address_clone.clone(),
-                                                codec.clone(),
-                                                mode_clone.clone(),
-                                                metadata_clone.clone(),
-                                                retry_count + 1,
+    let mut retry_stream = CastStreamWithRetry::new(receiver,
+                                                    channels_clone.clone(),
+                                                    address_client_clone.clone(),
+                                                    event_sender.clone(),
+                                                    db_client.clone(),
+                                                    uuid_clone.clone(),
+                                                    address_clone.clone(),
+                                                    codec.clone(),
+                                                    mode_clone.clone(),
+                                                    metadata_clone.clone(),
+                                                    retry_count + 1,
     );
-    let mut retry_stream = Arc::new(Mutex::new(retry_stream));
 
     let db_client_clone = db_client.clone();
 
@@ -319,12 +318,11 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         let uuid_clone = uuid.clone();
         let db_client_1 = db_client_clone.clone();
         let db_client_2 = db_client_clone.clone();
-        let mut stream = retry_stream.clone().lock().unwrap();
-        let mut retry_stream_clone = retry_stream.clone().lock().unwrap();
-        let mut retry_stream_clone_2 = retry_stream.clone().lock().unwrap();
+        let mut retry_stream_clone = retry_stream.clone();
 
         let payload_stream = async_stream::stream! {
-            while let Some(mut addr_payload_result) = stream.next().await {
+            let mut retry_stream_clone_2 = retry_stream.clone();
+            while let Some(mut addr_payload_result) = retry_stream.next().await {
                 match addr_payload_result {
                     Ok(mut addr_payload) => {
                         let payload_type = addr_payload.payload.payload_type;
@@ -602,6 +600,7 @@ pub async fn ping_handler() -> Result<impl warp::Reply, warp::Rejection> {
     Ok(warp::reply::json(&"pong"))
 }
 
+#[derive(Clone)]
 struct CastStreamWithRetry<T> {
     inner: ReusableBoxFuture<'static, (Result<T, RecvError>, Receiver<T>)>,
     channels: Arc<Mutex<UuidChannels>>,
