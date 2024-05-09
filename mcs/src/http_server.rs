@@ -696,15 +696,19 @@ impl<T> Drop for CastStreamWithRetry<T> {
         let mut retry = self.retry.lock().unwrap();
         info!("Retrying call leg {} for address {} , {} times", self.uuid.clone(), self.address.clone(), retry.retry_count);
         if retry.retry_count != -1 && retry.retry_count < 4 {
-            let duration = u64::pow(2, retry.retry_count.clone() as u32) * 100;
+            let duration = u64::pow(2, retry.retry_count as u32) * 100;
+            info!("sleeping for {}", duration);
             sleep(Duration::from_millis(duration));
             let db_client = self.db_client.clone();
             retry.retry_count = retry.retry_count + 1;
+            info!("New retry count {}", retry.retry_count);
             if let Ok(_) = db_client.select_by_call_id_and_address(self.uuid.clone(), self.address.clone()) {
+                info!("DB Entry There");
                 start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
                            self.uuid.clone(), self.address.clone(), self.codec.clone(),
                            self.mode.clone(), self.metadata.clone(), false, self.retry.clone());
             } else {
+                info!("DB Entry not there");
                 start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
                            self.uuid.clone(), self.address.clone(), self.codec.clone(),
                            self.mode.clone(), self.metadata.clone(), true, self.retry.clone());
