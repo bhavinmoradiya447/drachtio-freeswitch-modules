@@ -756,7 +756,6 @@ dependencies = [
  "config",
  "http 1.0.0",
  "lazy_static",
- "log",
  "package",
  "prost",
  "serde 1.0.197",

@@ -7,9 +7,11 @@ use tracing::{error, info, trace};
 use crate::mcs::DialogRequestPayloadType;
 use crate::{UuidChannels, CONFIG};
 use crate::{AddressPayload, DialogRequestPayload};
+use crate::db_client::DbClient;
 
 pub async fn start_udp_server(
     channels: Arc<Mutex<UuidChannels>>,
+    db_client: Arc<DbClient>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // get socket path from the config
     let socket_path = CONFIG.udp_server.socket_file.clone();
@@ -47,7 +49,8 @@ pub async fn start_udp_server(
                 // send the buffer to the channel and log on error
                 if let Err(_e) = channel.send(
                     parse_payload(buffer[..size].to_vec(), codec_sender.codec.clone())) {
-                    error!("failed to send to channel; uuid = {}", uuid);
+                    error!("failed to send to channel; uuid = {}", uuid.clone());
+                    db_client.delete_by_call_leg_id(uuid);
                     done = true;
                 }
                 if size == 32 || done {
@@ -58,7 +61,7 @@ pub async fn start_udp_server(
             }
         }
     })
-    .await?;
+        .await?;
     Ok(())
 }
 

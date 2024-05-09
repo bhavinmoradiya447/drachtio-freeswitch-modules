@@ -20,9 +20,6 @@ use warp::{
     Filter, Rejection, Reply,
 };
 use std::path::Path;
-use std::time::Duration;
-use tokio::time::sleep;
-use tonic::codegen::tokio_stream::StreamExt;
 use warp::header::value;
 
 pub mod mcs {
@@ -291,106 +288,77 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
     let metadata_clone = metadata.clone();
     let mut receiver = channel.subscribe();
     let db_client_clone = db_client.clone();
-
     tokio::spawn(async move {
-        let t = tokio::spawn(async move {
-            info!("init payload stream for uuid: {} to: {}", uuid, address);
-            let address_clone = address.clone();
-            let uuid_clone = uuid.clone();
-            let db_client_1 = db_client_clone.clone();
-            let db_client_2 = db_client_clone.clone();
+        info!("init payload stream for uuid: {} to: {}", uuid, address);
+        let address_clone = address.clone();
+        let uuid_clone = uuid.clone();
+        let db_client_1 = db_client_clone.clone();
+        let db_client_2 = db_client_clone.clone();
 
-            let payload_stream = async_stream::stream! {
-            loop {
-                match receiver.recv().await {
-                    Ok(mut addr_payload) => {
-                        let payload_type = addr_payload.payload.payload_type;
-                        process_payload(&mut addr_payload.payload, mode.clone());
-                        if payload_type == eval(&DialogRequestPayloadType::AudioStart) && address.clone() != addr_payload.address {
-                            continue;
+        let payload_stream = async_stream::stream! {
+            while let Ok(mut addr_payload) = receiver.recv().await {
+                let payload_type = addr_payload.payload.payload_type;
+                process_payload(&mut addr_payload.payload, mode.clone());
+                if payload_type == eval(&DialogRequestPayloadType::AudioStart) && address.clone() != addr_payload.address {
+                    continue;
+                }
+                yield addr_payload.payload;
+                if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
+                    || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address.clone() == addr_payload.address) {
+                    info!("done streaming for uuid: {} to: {}", uuid.clone(), address.clone());
+                    if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
+                        let file_path = format!("/tmp/{}", uuid.clone());
+                        if Path::new(file_path.as_str()).exists() {
+                         std::fs::remove_dir_all(file_path).expect("Failed to remove Directory");
                         }
-                        yield addr_payload.payload;
-                        if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
-                            || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address.clone() == addr_payload.address) {
-                            info!("done streaming for uuid: {} to: {}", uuid.clone(), address.clone());
-                            if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
-                                let file_path = format!("/tmp/{}", uuid.clone());
-                                if Path::new(file_path.as_str()).exists() {
-                                 std::fs::remove_dir_all(file_path).expect("Failed to remove Directory");
-                                }
-                                db_client_1.delete_by_call_leg_and_client_address(uuid.clone(), address.clone());
-                                let mut channels_ = channels_clone.lock().unwrap();
-                                channels_.uuid_sender_map.remove(uuid.as_str());
-                            }
-                            break;
-                        }
+                        db_client_1.delete_by_call_leg_and_client_address(uuid.clone(), address.clone());
+                        let mut channels_ = channels_clone.lock().unwrap();
+                        channels_.uuid_sender_map.remove(uuid.as_str());
                     }
-                    Err(e) => error!("Failed to receive {:?}", e)
+                    break;
                 }
             }
 
         };
-            let request = tonic::Request::new(payload_stream);
-            let event_sender1 = event_sender.clone();
-
-            let response = client.dialog(request).await.unwrap();
-            let mut resp_stream = response.into_inner();
-
-            while let Some(received) = resp_stream.next().await {
-                match received {
-                    Ok(t) => { info!("\t ---  received message: `{}`", t.data); }
-                    Err(e) => { error!(" -- Recieved error `{:?}`", e); }
-                }
-            }
-
-            /*match client.dialog(request).await {
+        let request = tonic::Request::new(payload_stream);
+        let event_sender1 = event_sender.clone();
+        match client.dialog(request).await {
             Ok(response) => {
-
                 tokio::spawn(async move {
                     let mut is_first_message = true;
 
-
                     let mut response = response.into_inner();
-
-                    while let Some(received) = response.next().await {
-                        match received {
-                            Ok(payload) => {
-                                if is_first_message && payload.payload_type == eval1(&DialogResponsePayloadType::DialogEnd) {
-                                    event_sender1.send(get_start_failed_event_command(uuid_clone.as_str(),
-                                                                                      address_clone.as_str(),
-                                                                                      payload.data.as_str(),
-                                                                                      "subscriber-error"))
-                                        .expect("Failed to send start client error");
-                                } else if is_first_message {
-                                    let mut data = metadata.as_str();
-                                    if payload.payload_type == eval1(&DialogResponsePayloadType::DialogStart) {
-                                        data = payload.data.as_str();
-                                    }
-                                    event_sender1.send(get_start_success_event_command(uuid_clone.as_str(),
-                                                                                       address_clone.as_str(),
-                                                                                       data))
-                                        .expect("Failed to send start success event");
-                                    if insert_to_db {
-                                        db_client_2.insert(CallDetails {
-                                            call_leg_id: uuid_clone.clone(),
-                                            client_address: address_clone.clone(),
-                                            codec: codec.clone(),
-                                            mode: mode_clone.clone(),
-                                            metadata: metadata.clone(),
-                                        });
-                                    }
-                                }
-                                is_first_message = false;
-                                if payload.payload_type == eval1(&DialogResponsePayloadType::ResponseEnd) {
-                                    break;
-                                }
-                                process_response_payload(uuid_clone.as_str(), address_clone.as_str(), &payload, event_sender1.clone());
+                    while let Some(payload) = response.message().await.unwrap() {
+                        if is_first_message && payload.payload_type == eval1(&DialogResponsePayloadType::DialogEnd) {
+                            event_sender1.send(get_start_failed_event_command(uuid_clone.as_str(),
+                                                                              address_clone.as_str(),
+                                                                              payload.data.as_str(),
+                                                                              "subscriber-error"))
+                                .expect("Failed to send start client error");
+                        } else if is_first_message {
+                            let mut data = metadata.as_str();
+                            if payload.payload_type == eval1(&DialogResponsePayloadType::DialogStart) {
+                                data = payload.data.as_str();
                             }
-                            Err(e) => {
-                                error!("Got Error during reading response stream {:?}", e);
-                                break;
+                            event_sender1.send(get_start_success_event_command(uuid_clone.as_str(),
+                                                                               address_clone.as_str(),
+                                                                               data))
+                                .expect("Failed to send start success event");
+                            if insert_to_db {
+                                db_client_2.insert(CallDetails {
+                                    call_leg_id: uuid_clone.clone(),
+                                    client_address: address_clone.clone(),
+                                    codec: codec.clone(),
+                                    mode: mode_clone.clone(),
+                                    metadata: metadata.clone(),
+                                });
                             }
                         }
+                        is_first_message = false;
+                        if payload.payload_type == eval1(&DialogResponsePayloadType::ResponseEnd) {
+                            break;
+                        }
+                        process_response_payload(uuid_clone.as_str(), address_clone.as_str(), &payload, event_sender1.clone());
                     }
                 });
             }
@@ -402,12 +370,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                                                  "connection-failed"))
                     .expect("Failed to send start failed event");
             }
-        }; */
-        });
-        match t.await {
-            Ok(_) => { info!("Success") }
-            Err(e) => { error!("Got ERROR {:?}", e) }
-        }
+        };
     });
 
     if let Err(e) = channel.send(AddressPayload::new(
