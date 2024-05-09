@@ -298,7 +298,8 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
     }.sender.clone();
     let metadata_clone = metadata.clone();
     let receiver = channel.subscribe();
-    let retry_clone = retry.clone().lock().unwrap();
+    let retry_clone = retry.clone();
+    let retry_clone = retry_clone.lock().unwrap();
     retry_clone.retry_count = retry_clone.retry_count + 1;
     let mut retry_stream = CastStreamWithRetry::new(receiver,
                                                     channels_clone.clone(),
