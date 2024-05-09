@@ -607,6 +607,7 @@ pub async fn ping_handler() -> Result<impl warp::Reply, warp::Rejection> {
 }
 
 
+#[derive(Debug, Default, Clone)]
 struct Retry {
     retry_count: i8,
 }
