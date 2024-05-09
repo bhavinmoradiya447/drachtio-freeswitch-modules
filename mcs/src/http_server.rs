@@ -244,6 +244,7 @@ async fn start_cast_handler(
 fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<AddressClients>>,
               event_sender: UnboundedSender<String>, db_client: Arc<DbClient>, uuid: String,
               address: String, codec: String, mode: String, metadata: String, insert_to_db: bool, retry: Arc<Mutex<Retry>>) {
+    info!("i am here 1");
     let count = COUNTER.fetch_add(1, SeqCst);
     let mode_clone = mode.clone();
     let uuid_clone = uuid.clone();
@@ -252,7 +253,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
     let address_key = format!("{}-{}", address, group);
     let address_uri = Uri::try_from(&address).unwrap();
     let address_client_clone = address_client.clone();
-
+    info!("i am here 2");
     let mut address_client = address_client.lock().unwrap();
     let mut client = match address_client.clients.get(&address_key) {
         Some(client) => client.clone(),
@@ -279,6 +280,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
             grpc_client
         }
     };
+    info!("i am here 3");
     let channels_clone = channels.clone();
     let mut channels = channels.lock().unwrap();
     let channel = match channels.uuid_sender_map.get(&uuid) {
@@ -295,11 +297,14 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
             codec_sender
         }
     }.sender.clone();
+    info!("i am here 4");
     let metadata_clone = metadata.clone();
     let receiver = channel.subscribe();
     let retry_clone = retry.clone();
+    info!("i am here 5");
     let mut retry_clone = retry_clone.lock().unwrap();
     retry_clone.retry_count = retry_clone.retry_count + 1;
+    info!("i am here 6");
     let retry_clone = retry.clone();
     let mut retry_stream = CastStreamWithRetry::new(receiver,
                                                     channels_clone.clone(),
@@ -313,7 +318,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                                     metadata_clone.clone(),
                                                     retry_clone,
     );
-
+    info!("i am here 7");
     let db_client_clone = db_client.clone();
     let retry_clone = retry.clone();
 
@@ -697,18 +702,14 @@ impl<T> Drop for CastStreamWithRetry<T> {
         info!("Retrying call leg {} for address {} , {} times", self.uuid.clone(), self.address.clone(), retry.retry_count);
         if retry.retry_count != -1 && retry.retry_count < 4 {
             let duration = u64::pow(2, retry.retry_count as u32) * 100;
-            info!("sleeping for {}", duration);
             sleep(Duration::from_millis(duration));
             let db_client = self.db_client.clone();
             retry.retry_count = retry.retry_count + 1;
-            info!("New retry count {}", retry.retry_count);
             if let Ok(_) = db_client.select_by_call_id_and_address(self.uuid.clone(), self.address.clone()) {
-                info!("DB Entry There");
                 start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
                            self.uuid.clone(), self.address.clone(), self.codec.clone(),
                            self.mode.clone(), self.metadata.clone(), false, self.retry.clone());
             } else {
-                info!("DB Entry not there");
                 start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
                            self.uuid.clone(), self.address.clone(), self.codec.clone(),
                            self.mode.clone(), self.metadata.clone(), true, self.retry.clone());
@@ -716,6 +717,5 @@ impl<T> Drop for CastStreamWithRetry<T> {
         } else {
             info!("Ignoring as retry exceeded");
         }
-        info!("I am here!!!");
     }
 }
