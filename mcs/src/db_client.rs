@@ -100,7 +100,7 @@ impl DbClient {
         call_details
     }
 
-    pub fn select_by_call_id_and_address(&self, call_leg_id: String, client_address: String) -> Result<CallDetails, Err> {
+    pub fn select_by_call_id_and_address(&self, call_leg_id: String, client_address: String) -> Result<CallDetails, String> {
         let mut stmt =
             self.connection.prepare("SELECT * FROM  from CALL_DETAILS where CALL_LEG_ID= :callId and CLIENT_ADDRESS= :address").unwrap();
 
@@ -118,10 +118,10 @@ impl DbClient {
                     metadata: stmt.read(4).unwrap(),
                 })
             }
-            Err(e) => { Err(e) }
+            Err(e) => { Err(format!("{:?}, {:?}", e.message, e.code)) }
             _ => {
                 info!("Got Other then row");
-                Err("Got Other then row")
+                Err("Got Other then row".parse().unwrap())
             }
         }
     }
