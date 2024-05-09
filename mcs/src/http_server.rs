@@ -357,7 +357,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         let event_sender1 = event_sender.clone();
         match client.dialog(request).await {
             Ok(response) => {
-                retry_stream_clone.clone().reset_retry_counter();
+                retry_stream_clone.reset_retry_counter();
                 tokio::spawn(async move {
                     let mut is_first_message = true;
 
