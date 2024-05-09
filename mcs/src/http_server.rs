@@ -693,9 +693,9 @@ impl<T: 'static + Clone + Send> Stream for CastStreamWithRetry<T> {
 
 impl<T> Drop for CastStreamWithRetry<T> {
     fn drop(&mut self) {
-        let mut retry_count;
+        let retry_count;
         {
-            let mut retry = self.retry.lock().unwrap();
+            let retry = self.retry.lock().unwrap();
             retry_count = retry.retry_count;
         }
         info!("Retrying call leg {} for address {} , {} times", self.uuid.clone(), self.address.clone(), retry_count);
@@ -703,10 +703,6 @@ impl<T> Drop for CastStreamWithRetry<T> {
             let duration = u64::pow(2, retry_count as u32) * 100;
             sleep(Duration::from_millis(duration));
             let db_client = self.db_client.clone();
-            {
-                let mut retry = self.retry.lock().unwrap();
-                retry.retry_count = retry_count + 1;
-            }
             if let Ok(_) = db_client.select_by_call_id_and_address(self.uuid.clone(), self.address.clone()) {
                 start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
                            self.uuid.clone(), self.address.clone(), self.codec.clone(),
