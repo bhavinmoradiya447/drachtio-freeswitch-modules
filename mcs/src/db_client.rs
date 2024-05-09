@@ -102,7 +102,7 @@ impl DbClient {
 
     pub fn select_by_call_id_and_address(&self, call_leg_id: String, client_address: String) -> Result<CallDetails, String> {
         let mut stmt =
-            self.connection.prepare("SELECT * FROM  from CALL_DETAILS where CALL_LEG_ID= :callId and CLIENT_ADDRESS= :address").unwrap();
+            self.connection.prepare("SELECT * FROM CALL_DETAILS where CALL_LEG_ID= :callId and CLIENT_ADDRESS= :address").unwrap();
 
         stmt.bind_iter::<_, (_, Value)>([(":callId", call_leg_id.clone().into()),
             (":address", client_address.clone().into())]).unwrap();
