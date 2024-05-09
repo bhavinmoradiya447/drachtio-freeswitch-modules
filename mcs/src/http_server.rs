@@ -694,7 +694,7 @@ impl<T: 'static + Clone + Send> Stream for CastStreamWithRetry<T> {
 impl<T> Drop for CastStreamWithRetry<T> {
     fn drop(&mut self) {
         let mut retry = self.retry.lock().unwrap();
-        info!("Retrying call leg {} for addreess {} , {} times", self.uuid.clone(), self.address.clone(), retry.retry_count);
+        info!("Retrying call leg {} for address {} , {} times", self.uuid.clone(), self.address.clone(), retry.retry_count);
         if retry.retry_count != -1 && retry.retry_count < 4 {
             let duration = u64::pow(2, retry.retry_count.clone() as u32) * 100;
             sleep(Duration::from_millis(duration));
@@ -712,5 +712,6 @@ impl<T> Drop for CastStreamWithRetry<T> {
         } else {
             info!("Ignoring as retry exceeded");
         }
+        info!("I am here!!!");
     }
 }
