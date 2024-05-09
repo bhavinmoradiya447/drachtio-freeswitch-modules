@@ -330,7 +330,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         let retry_clone_2 = retry_clone.clone();
 
         let payload_stream = async_stream::stream! {
-            while let Some(mut addr_payload_result) = retry_stream.next().await {
+            while let Some(addr_payload_result) = retry_stream.next().await {
                 match addr_payload_result {
                     Ok(mut addr_payload) => {
                         let payload_type = addr_payload.payload.payload_type;
@@ -342,7 +342,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                         if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
                             || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address.clone() == addr_payload.address) {
                             info!("done streaming for uuid: {} to: {}", uuid.clone(), address.clone());
-                            let retry_clone = retry_clone_1.lock().unwrap();
+                            let mut retry_clone = retry_clone_1.lock().unwrap();
                             retry_clone.retry_count = -1;
                             if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
                                 let file_path = format!("/tmp/{}", uuid.clone());
@@ -364,8 +364,9 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         let event_sender1 = event_sender.clone();
         match client.dialog(request).await {
             Ok(response) => {
-                let retry_clone = retry_clone_2.lock().unwrap();
+                let mut retry_clone = retry_clone_2.lock().unwrap();
                 retry_clone.retry_count = 1;
+                let retry_clone =  retry_clone_2.clone();
                 tokio::spawn(async move {
                     let mut is_first_message = true;
 
@@ -377,7 +378,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                                                               payload.data.as_str(),
                                                                               "subscriber-error"))
                                 .expect("Failed to send start client error");
-                            let retry_clone = retry_clone_2.lock().unwrap();
+                            let mut retry_clone = retry_clone.lock().unwrap();
                             retry_clone.retry_count = -1;
                         } else if is_first_message {
                             let mut data = metadata.as_str();
