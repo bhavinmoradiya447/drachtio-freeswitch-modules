@@ -683,7 +683,7 @@ impl<T: 'static + Clone + Send> Stream for CastStreamWithRetry<T> {
 
 impl<T> Drop for CastStreamWithRetry<T> {
     fn drop(&mut self) {
-        if self.retry_count != -1 && self.retry_count > 3 {
+        if self.retry_count != -1 && self.retry_count < 4 {
             let duration = u64::pow(2, self.retry_count.clone() as u32) * 100;
             sleep(Duration::from_millis(duration));
             let db_client = self.db_client.clone();
