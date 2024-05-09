@@ -323,30 +323,34 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
 
         let payload_stream = async_stream::stream! {
             let mut retry_stream_clone_2 = retry_stream.clone();
-            while let Ok(mut addr_payload) = retry_stream.next().await {
-                let payload_type = addr_payload.payload.payload_type;
-                process_payload(&mut addr_payload.payload, mode.clone());
-                if payload_type == eval(&DialogRequestPayloadType::AudioStart) && address.clone() != addr_payload.address {
-                    continue;
-                }
-                yield addr_payload.payload;
-                if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
-                    || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address.clone() == addr_payload.address) {
-                    info!("done streaming for uuid: {} to: {}", uuid.clone(), address.clone());
-                    retry_stream_clone_2.disable_retry();
-                    if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
-                        let file_path = format!("/tmp/{}", uuid.clone());
-                        if Path::new(file_path.as_str()).exists() {
-                         std::fs::remove_dir_all(file_path).expect("Failed to remove Directory");
+            while let Some(mut addr_payload_result) = retry_stream.next().await {
+                match addr_payload_result {
+                    Ok(mut addr_payload) => {
+                        let payload_type = addr_payload.payload.payload_type;
+                        process_payload(&mut addr_payload.payload, mode.clone());
+                        if payload_type == eval(&DialogRequestPayloadType::AudioStart) && address.clone() != addr_payload.address {
+                            continue;
                         }
-                        db_client_1.delete_by_call_leg_and_client_address(uuid.clone(), address.clone());
-                        let mut channels_ = channels_clone.lock().unwrap();
-                        channels_.uuid_sender_map.remove(uuid.as_str());
+                        yield addr_payload.payload;
+                        if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
+                            || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address.clone() == addr_payload.address) {
+                            info!("done streaming for uuid: {} to: {}", uuid.clone(), address.clone());
+                            retry_stream_clone_2.disable_retry();
+                            if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
+                                let file_path = format!("/tmp/{}", uuid.clone());
+                                if Path::new(file_path.as_str()).exists() {
+                                 std::fs::remove_dir_all(file_path).expect("Failed to remove Directory");
+                                }
+                                db_client_1.delete_by_call_leg_and_client_address(uuid.clone(), address.clone());
+                                let mut channels_ = channels_clone.lock().unwrap();
+                                channels_.uuid_sender_map.remove(uuid.as_str());
+                            }
+                            break;
+                        }
                     }
-                    break;
+                    Err(e) => {error!("Gor Error on receiver Stream {:?}", e)}
                 }
             }
-
         };
         let request = tonic::Request::new(payload_stream);
         let event_sender1 = event_sender.clone();
@@ -686,11 +690,11 @@ impl<T> Drop for CastStreamWithRetry<T> {
             if let Ok(_) = db_client.select_by_call_id_and_address(self.uuid.clone(), self.address.clone()) {
                 start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
                            self.uuid.clone(), self.address.clone(), self.codec.clone(),
-                           self.mode.clone(), self.metadata.clone(), false, (self.retry_count + 1));
+                           self.mode.clone(), self.metadata.clone(), false, self.retry_count + 1);
             } else {
                 start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
                            self.uuid.clone(), self.address.clone(), self.codec.clone(),
-                           self.mode.clone(), self.metadata.clone(), true, (self.retry_count + 1));
+                           self.mode.clone(), self.metadata.clone(), true, self.retry_count + 1);
             }
         } else {
             info!("Ignoring as retry exceeded");
