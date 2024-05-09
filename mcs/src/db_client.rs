@@ -1,4 +1,4 @@
-use sqlite::{Connection, ConnectionThreadSafe, Value};
+use sqlite::{Connection, ConnectionThreadSafe, State, Value};
 use tracing::{error, info};
 
 #[derive(Debug, Default)]
@@ -98,5 +98,31 @@ impl DbClient {
 
         info!("Select query return {} rows, values: {:?}", call_details.len(), call_details);
         call_details
+    }
+
+    pub fn select_by_call_id_and_address(&self, call_leg_id: String, client_address: String) -> Result<CallDetails, Err> {
+        let mut stmt =
+            self.connection.prepare("SELECT * FROM  from CALL_DETAILS where CALL_LEG_ID= :callId and CLIENT_ADDRESS= :address").unwrap();
+
+        stmt.bind_iter::<_, (_, Value)>([(":callId", call_leg_id.clone().into()),
+            (":address", client_address.clone().into())]).unwrap();
+
+
+        match stmt.next() {
+            Ok(State::Row) => {
+                Ok(CallDetails {
+                    call_leg_id: stmt.read(0).unwrap(),
+                    client_address: stmt.read(1).unwrap(),
+                    codec: stmt.read(2).unwrap(),
+                    mode: stmt.read(3).unwrap(),
+                    metadata: stmt.read(4).unwrap(),
+                })
+            }
+            Err(e) => { Err(e) }
+            _ => {
+                info!("Got Other then row");
+                Err("Got Other then row")
+            }
+        }
     }
 }

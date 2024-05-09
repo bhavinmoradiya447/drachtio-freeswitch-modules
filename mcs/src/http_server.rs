@@ -6,7 +6,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
 use std::sync::{Arc, Mutex};
 
-use tokio::sync::broadcast;
 use tokio::sync::mpsc::UnboundedSender;
 use tonic::service::interceptor::InterceptedService;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Uri};
@@ -20,6 +19,15 @@ use warp::{
     Filter, Rejection, Reply,
 };
 use std::path::Path;
+use std::pin::Pin;
+use std::task::{Context, Poll, ready};
+use std::thread::sleep;
+use std::time::Duration;
+use tokio::sync::broadcast;
+use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::broadcast::Receiver;
+use tokio_util::sync::ReusableBoxFuture;
+use tonic::codegen::tokio_stream::{Stream, StreamExt};
 use warp::header::value;
 
 pub mod mcs {
@@ -83,7 +91,7 @@ pub async fn start_http_server(
     for call_detail in call_details.iter() {
         start_cast(uuid_channels_clone.clone(), address_client_clone.clone(), event_sender_clone.clone(), db_client_clone.clone(),
                    call_detail.call_leg_id.clone(), call_detail.client_address.clone(), call_detail.codec.clone(),
-                   call_detail.mode.clone(), call_detail.metadata.clone(), false);
+                   call_detail.mode.clone(), call_detail.metadata.clone(), false, 0);
     }
 
     let start_cast = warp::path!("start_cast")
@@ -227,14 +235,14 @@ async fn start_cast_handler(
     let codec = request.codec.unwrap_or("mulaw".to_string());
     let mode = request.mode.unwrap_or("combined".to_string());
     let metadata = request.metadata.unwrap_or("".to_string()).clone();
-    start_cast(channels, address_client, event_sender, db_client, uuid, address, codec, mode, metadata, true);
+    start_cast(channels, address_client, event_sender, db_client, uuid, address, codec, mode, metadata, true, 0);
     info!("returning ok");
     Ok(warp::reply::json(&"ok"))
 }
 
 fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<AddressClients>>,
               event_sender: UnboundedSender<String>, db_client: Arc<DbClient>, uuid: String,
-              address: String, codec: String, mode: String, metadata: String, insert_to_db: bool) {
+              address: String, codec: String, mode: String, metadata: String, insert_to_db: bool, retry_count: i8) {
     let count = COUNTER.fetch_add(1, SeqCst);
     let mode_clone = mode.clone();
     let uuid_clone = uuid.clone();
@@ -242,6 +250,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
     let group = (count / CONFIG.http_server.grpc_connection_pool) % CONFIG.http_server.grpc_connection_pool;
     let address_key = format!("{}-{}", address, group);
     let address_uri = Uri::try_from(&address).unwrap();
+    let address_client_clone = address_client.clone();
 
     let mut address_client = address_client.lock().unwrap();
     let mut client = match address_client.clients.get(&address_key) {
@@ -286,17 +295,35 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         }
     }.sender.clone();
     let metadata_clone = metadata.clone();
-    let mut receiver = channel.subscribe();
+    let receiver = channel.subscribe();
+    let retry_stream = CastStreamWithRetry::new(receiver,
+                                                channels_clone.clone(),
+                                                address_client_clone.clone(),
+                                                event_sender.clone(),
+                                                db_client.clone(),
+                                                uuid_clone.clone(),
+                                                address_clone.clone(),
+                                                codec.clone(),
+                                                mode_clone.clone(),
+                                                metadata_clone.clone(),
+                                                retry_count + 1,
+    );
+    let mut retry_stream = Arc::new(retry_stream);
+
     let db_client_clone = db_client.clone();
+
+
     tokio::spawn(async move {
         info!("init payload stream for uuid: {} to: {}", uuid, address);
         let address_clone = address.clone();
         let uuid_clone = uuid.clone();
         let db_client_1 = db_client_clone.clone();
         let db_client_2 = db_client_clone.clone();
+        let mut retry_stream_clone = retry_stream.clone();
 
         let payload_stream = async_stream::stream! {
-            while let Ok(mut addr_payload) = receiver.recv().await {
+            let mut retry_stream_clone_2 = retry_stream.clone();
+            while let Ok(mut addr_payload) = retry_stream.next().await {
                 let payload_type = addr_payload.payload.payload_type;
                 process_payload(&mut addr_payload.payload, mode.clone());
                 if payload_type == eval(&DialogRequestPayloadType::AudioStart) && address.clone() != addr_payload.address {
@@ -306,6 +333,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                 if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
                     || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address.clone() == addr_payload.address) {
                     info!("done streaming for uuid: {} to: {}", uuid.clone(), address.clone());
+                    retry_stream_clone_2.disable_retry();
                     if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
                         let file_path = format!("/tmp/{}", uuid.clone());
                         if Path::new(file_path.as_str()).exists() {
@@ -324,6 +352,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         let event_sender1 = event_sender.clone();
         match client.dialog(request).await {
             Ok(response) => {
+                retry_stream_clone.clone().reset_retry_counter();
                 tokio::spawn(async move {
                     let mut is_first_message = true;
 
@@ -335,6 +364,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                                                               payload.data.as_str(),
                                                                               "subscriber-error"))
                                 .expect("Failed to send start client error");
+                            retry_stream_clone.disable_retry();
                         } else if is_first_message {
                             let mut data = metadata.as_str();
                             if payload.payload_type == eval1(&DialogResponsePayloadType::DialogStart) {
@@ -364,11 +394,14 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
             }
             Err(e) => {
                 error!("Error connecting client {} , {}", address_clone.clone(), e.message());
-                event_sender.send(get_start_failed_event_command(uuid_clone.as_str(),
-                                                                 address_clone.as_str(),
-                                                                 metadata.as_str(),
-                                                                 "connection-failed"))
-                    .expect("Failed to send start failed event");
+                if retry_stream_clone.retry_count == 3 {
+                    event_sender.send(get_start_failed_event_command(uuid_clone.as_str(),
+                                                                     address_clone.as_str(),
+                                                                     metadata.as_str(),
+                                                                     "connection-failed"))
+                        .expect("Failed to send start failed event");
+                }
+                drop(retry_stream_clone);
             }
         };
     });
@@ -562,4 +595,105 @@ async fn stop_all_handler(
 #[instrument(name = "ping")]
 pub async fn ping_handler() -> Result<impl warp::Reply, warp::Rejection> {
     Ok(warp::reply::json(&"pong"))
+}
+
+struct CastStreamWithRetry<T> {
+    inner: ReusableBoxFuture<'static, (Result<T, RecvError>, Receiver<T>)>,
+    channels: Arc<Mutex<UuidChannels>>,
+    address_client: Arc<Mutex<AddressClients>>,
+    event_sender: UnboundedSender<String>,
+    db_client: Arc<DbClient>,
+    uuid: String,
+    address: String,
+    codec: String,
+    mode: String,
+    metadata: String,
+    retry_count: i8,
+}
+
+/// An error returned from the inner stream of a [`CastStreamWithRetry`].
+#[derive(Debug, PartialEq, Eq, Clone)]
+enum BroadcastStreamRecvError {
+    /// The receiver lagged too far behind. Attempting to receive again will
+    /// return the oldest message still retained by the channel.
+    ///
+    /// Includes the number of skipped messages.
+    Lagged(u64),
+}
+
+async fn make_future<T: Clone>(mut rx: Receiver<T>) -> (Result<T, RecvError>, Receiver<T>) {
+    let result = rx.recv().await;
+    (result, rx)
+}
+
+impl<T: 'static + Clone + Send> CastStreamWithRetry<T> {
+    /// Create a new `BroadcastStream`.
+    pub fn new(rx: Receiver<T>, channels: Arc<Mutex<UuidChannels>>,
+               address_client: Arc<Mutex<AddressClients>>,
+               event_sender: UnboundedSender<String>,
+               db_client: Arc<DbClient>,
+               uuid: String,
+               address: String,
+               codec: String,
+               mode: String,
+               metadata: String,
+               retry_count: i8) -> Self {
+        Self {
+            inner: ReusableBoxFuture::new(make_future(rx)),
+            channels,
+            address_client,
+            event_sender,
+            db_client,
+            uuid,
+            address,
+            codec,
+            mode,
+            metadata,
+            retry_count,
+        }
+    }
+
+    pub fn reset_retry_counter(&mut self) {
+        self.retry_count = 1;
+    }
+
+    pub fn disable_retry(&mut self) {
+        self.retry_count = -1;
+    }
+}
+
+impl<T: 'static + Clone + Send> Stream for CastStreamWithRetry<T> {
+    type Item = Result<T, BroadcastStreamRecvError>;
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let (result, rx) = ready!(self.inner.poll(cx));
+        self.inner.set(make_future(rx));
+        match result {
+            Ok(item) => Poll::Ready(Some(Ok(item))),
+            Err(RecvError::Closed) => Poll::Ready(None),
+            Err(RecvError::Lagged(n)) => {
+                Poll::Ready(Some(Err(BroadcastStreamRecvError::Lagged(n))))
+            }
+        }
+    }
+}
+
+impl<T> Drop for CastStreamWithRetry<T> {
+    fn drop(&mut self) {
+        if self.retry_count != -1 && self.retry_count > 3 {
+            let duration = u64::pow(2, self.retry_count.clone() as u32) * 100;
+            sleep(Duration::from_millis(duration));
+            let db_client = self.db_client.clone();
+            if let Ok(_) = db_client.select_by_call_id_and_address(self.uuid.clone(), self.address.clone()) {
+                start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
+                           self.uuid.clone(), self.address.clone(), self.codec.clone(),
+                           self.mode.clone(), self.metadata.clone(), false, (self.retry_count + 1));
+            } else {
+                start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
+                           self.uuid.clone(), self.address.clone(), self.codec.clone(),
+                           self.mode.clone(), self.metadata.clone(), true, (self.retry_count + 1));
+            }
+        } else {
+            info!("Ignoring as retry exceeded");
+        }
+    }
 }
