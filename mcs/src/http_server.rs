@@ -323,7 +323,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         let db_client_1 = db_client_clone.clone();
         let db_client_2 = db_client_clone.clone();
         //  let mut retry_stream_clone = retry_stream.clone();
-        let mut retry_clone_1 = retry.clone().lock().unwrap();
+        let mut retry_clone_1 = retry.clone();
         //let mut retry_clone_2 = retry.clone().lock().unwrap();
 
 
@@ -340,7 +340,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                         if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
                             || (payload_type == eval(&DialogRequestPayloadType::AudioStop) && address.clone() == addr_payload.address) {
                             info!("done streaming for uuid: {} to: {}", uuid.clone(), address.clone());
-                            retry_clone_1.retry_count = -1;
+                            retry_clone_1.lock().unwrap().retry_count = -1;
                             if payload_type == eval(&DialogRequestPayloadType::AudioEnd) {
                                 let file_path = format!("/tmp/{}", uuid.clone());
                                 if Path::new(file_path.as_str()).exists() {
@@ -361,7 +361,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         let event_sender1 = event_sender.clone();
         match client.dialog(request).await {
             Ok(response) => {
-                retry_clone_1.retry_count = 1;
+                retry_clone_1.lock().unwrap().retry_count = 1;
                 tokio::spawn(async move {
                     let mut is_first_message = true;
 
@@ -373,7 +373,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                                                               payload.data.as_str(),
                                                                               "subscriber-error"))
                                 .expect("Failed to send start client error");
-                            retry_clone_1.retry_count = -11;
+                            retry_clone_1.lock().unwrap().retry_count = -11;
                         } else if is_first_message {
                             let mut data = metadata.as_str();
                             if payload.payload_type == eval1(&DialogResponsePayloadType::DialogStart) {
@@ -403,7 +403,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
             }
             Err(e) => {
                 error!("Error connecting client {} , {}", address_clone.clone(), e.message());
-                if retry_clone_1.retry_count == 3 {
+                if retry_clone_1.lock().unwrap().retry_count == 3 {
                     event_sender.send(get_start_failed_event_command(uuid_clone.as_str(),
                                                                      address_clone.as_str(),
                                                                      metadata.as_str(),
