@@ -324,7 +324,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         let mut retry_stream_clone_2 = retry_stream.clone().lock().unwrap();
 
         let payload_stream = async_stream::stream! {
-            while let Some(mut addr_payload_result) = stream.next().await.unwrap() {
+            while let Some(mut addr_payload_result) = stream.next().await {
                 match addr_payload_result {
                     Ok(mut addr_payload) => {
                         let payload_type = addr_payload.payload.payload_type;
