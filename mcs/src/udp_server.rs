@@ -50,7 +50,7 @@ pub async fn start_udp_server(
                 if let Err(_e) = channel.send(
                     parse_payload(buffer[..size].to_vec(), codec_sender.codec.clone())) {
                     error!("failed to send to channel; uuid = {}", uuid.clone());
-                    db_client.delete_by_call_leg_id(uuid);
+                    db_client.delete_by_call_leg_id(uuid.clone());
                     done = true;
                 }
                 if size == 32 || done {
