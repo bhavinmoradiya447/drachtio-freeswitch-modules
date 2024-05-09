@@ -319,12 +319,12 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
         let uuid_clone = uuid.clone();
         let db_client_1 = db_client_clone.clone();
         let db_client_2 = db_client_clone.clone();
-        let mut stream = retry_stream.clone().lock().await;
-        let mut retry_stream_clone = retry_stream.clone().lock().await;
-        let mut retry_stream_clone_2 = retry_stream.clone().lock().await;
+        let mut stream = retry_stream.clone().lock().unwrap();
+        let mut retry_stream_clone = retry_stream.clone().lock().unwrap();
+        let mut retry_stream_clone_2 = retry_stream.clone().lock().unwrap();
 
         let payload_stream = async_stream::stream! {
-            while let Some(mut addr_payload_result) = stream.next().await {
+            while let Some(mut addr_payload_result) = stream.next().await.unwrap() {
                 match addr_payload_result {
                     Ok(mut addr_payload) => {
                         let payload_type = addr_payload.payload.payload_type;
