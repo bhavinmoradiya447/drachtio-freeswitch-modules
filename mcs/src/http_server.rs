@@ -699,9 +699,9 @@ impl<T> Drop for CastStreamWithRetry<T> {
             retry_count = retry.retry_count;
         }
         if retry_count != -1 && retry_count < 5 {
-            info!("Retrying call leg {} for address {} , {} times", self.uuid.clone(), self.address.clone(), retry_count);
             let duration = u64::pow(2, retry_count as u32) * 100;
             sleep(Duration::from_millis(duration));
+            info!("Retrying call leg {} for address {} , {} times", self.uuid.clone(), self.address.clone(), retry_count);
             let db_client = self.db_client.clone();
             if let Ok(_) = db_client.select_by_call_id_and_address(self.uuid.clone(), self.address.clone()) {
                 start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
