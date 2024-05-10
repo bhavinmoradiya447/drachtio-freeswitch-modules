@@ -3,6 +3,7 @@ use reqwest::{Client, Error, Response};
 use tracing::error;
 use crate::CONFIG;
 
+#[derive(Debug)]
 pub struct HttpClient {
     client: Client,
 }
