@@ -2,7 +2,6 @@ use std::fmt;
 
 use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
-use utoipa::openapi::security::Password;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Log {

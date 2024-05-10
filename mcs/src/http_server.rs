@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fs;
 use std::fs::OpenOptions;
-use std::future::Future;
 use std::io::Write;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;

@@ -1,5 +1,5 @@
 use std::time::Duration;
-use reqwest::{Client, Error, Response};
+use reqwest::Client;
 use tracing::error;
 use crate::CONFIG;
 
