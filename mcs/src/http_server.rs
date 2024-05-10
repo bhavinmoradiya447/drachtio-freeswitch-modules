@@ -78,7 +78,7 @@ pub async fn start_http_server(
     let event_sender_clone = event_sender.clone();
     let db_client_clone = db_client.clone();
     let http_client = Arc::new(HttpClient::new());
-
+    let http_client_clone = http_client.clone();
 
     let with_uuid_channel = warp::any().map(move || Arc::clone(&uuid_channels));
     let with_event_sender = warp::any().map(move || event_sender.clone());
@@ -92,7 +92,7 @@ pub async fn start_http_server(
 
     let call_details = db_client_clone.select_all();
 
-    let http_client = http_client.clone();
+    let http_client = http_client_clone;
     for call_detail in call_details.iter() {
         match http_client.is_call_leg_exist(call_detail.call_leg_id.clone()).await {
             true => {
