@@ -714,6 +714,8 @@ impl<T> Drop for CastStreamWithRetry<T> {
             }
         } else {
             info!("Ignoring as retry exceeded");
+            let db_client = self.db_client.clone();
+            db_client.delete_by_call_leg_and_client_address(self.uuid.clone(), self.address.clone());
         }
     }
 }
