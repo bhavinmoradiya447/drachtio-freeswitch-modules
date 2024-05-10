@@ -1,6 +1,6 @@
 use std::time::Duration;
 use reqwest::Client;
-use tracing::error;
+use tracing::{error, info};
 use crate::CONFIG;
 
 #[derive(Debug)]
@@ -22,6 +22,7 @@ impl HttpClient {
     }
 
     pub async fn is_call_leg_exist(&self, uuid: String) -> bool {
+        info!("UserName {}, password {}", CONFIG.fs_http_client.user_name.clone(), Some(CONFIG.fs_http_client.password.clone());
         let request_url = format!("http://127.0.0.1:7080/xmlapi/uuid_exists?{}", uuid);
         match self.client.get(request_url)
             .timeout(Duration::from_secs(3))
