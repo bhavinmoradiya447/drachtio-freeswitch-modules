@@ -86,7 +86,7 @@ impl MediaCastService for MediaCastServiceImpl {
         // create a receiver stream to return
         let (tx, rx) = tokio::sync::mpsc::channel(4);
         tokio::spawn(async move {
-          //  for i in 1..10000 {
+            for i in 1..10000 {
                 let response = DialogResponsePayload {
                     payload_type: <DialogResponsePayloadType as Into<i32>>::into(
                         DialogResponsePayloadType::Event,
@@ -95,8 +95,8 @@ impl MediaCastService for MediaCastServiceImpl {
                     data: String::from("recording started"),
                 };
                 tx.send(Ok(response)).await.unwrap();
-             //   sleep(Duration::from_secs(1)).await;
-           // }
+                sleep(Duration::from_secs(1)).await;
+            }
         });
 
         Ok(Response::new(ReceiverStream::new(rx)))

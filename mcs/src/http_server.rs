@@ -698,8 +698,8 @@ impl<T> Drop for CastStreamWithRetry<T> {
             let retry = self.retry.lock().unwrap();
             retry_count = retry.retry_count;
         }
-        info!("Retrying call leg {} for address {} , {} times", self.uuid.clone(), self.address.clone(), retry_count);
-        if retry_count != -1 && retry_count < 4 {
+        if retry_count != -1 && retry_count < 5 {
+            info!("Retrying call leg {} for address {} , {} times", self.uuid.clone(), self.address.clone(), retry_count);
             let duration = u64::pow(2, retry_count as u32) * 100;
             sleep(Duration::from_millis(duration));
             let db_client = self.db_client.clone();
