@@ -27,6 +27,7 @@ use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio_util::sync::ReusableBoxFuture;
+use tonic::Code::{Aborted, Cancelled, FailedPrecondition, InvalidArgument, PermissionDenied, Unauthenticated, Unimplemented};
 use tonic::codegen::tokio_stream::{Stream, StreamExt};
 
 
@@ -45,6 +46,9 @@ use crate::CONFIG;
 use crate::db_client::{CallDetails, DbClient};
 use crate::fs_tcp_client::{get_event_command, get_start_failed_event_command, get_start_success_event_command, get_stop_failed_event_command, get_stop_success_event_command};
 use crate::http_client::HttpClient;
+
+static MAX_RETRY: i8 = 4;
+static RETRY_DELAY: u64 = 100;
 
 #[derive(Debug, Default, Clone)]
 struct TokenInterceptor;
@@ -424,17 +428,25 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                 });
             }
             Err(e) => {
-                error!("Error connecting client {} , {}", address_clone.clone(), e.message());
-                let retry_clone = retry_clone_2.lock().unwrap();
+                error!("Error connecting client {} , status: {}, message: {}", address_clone.clone(), e.code(), e.message());
 
-                if retry_clone.retry_count == 3 {
+                let retry_clone = retry_clone_2.lock().unwrap();
+                let status_code = e.code();
+                if retry_clone.retry_count == MAX_RETRY ||
+                    status_code == Cancelled ||
+                    status_code == InvalidArgument ||
+                    status_code == PermissionDenied ||
+                    status_code == FailedPrecondition ||
+                    status_code == Aborted ||
+                    status_code == Unimplemented ||
+                    status_code == Unauthenticated {
+                    retry_clone.retry_count = -1;
                     event_sender.send(get_start_failed_event_command(uuid_clone.as_str(),
                                                                      address_clone.as_str(),
                                                                      metadata.as_str(),
                                                                      "connection-failed"))
                         .expect("Failed to send start failed event");
                 }
-                //drop(retry_stream);
             }
         };
     });
@@ -723,8 +735,8 @@ impl<T> Drop for CastStreamWithRetry<T> {
 
         let result = futures::executor::block_on(http_client.is_call_leg_exist(self.uuid.clone()));
 
-        if retry_count != -1 && retry_count < 5 && result {
-            let duration = u64::pow(2, retry_count as u32) * 100;
+        if retry_count != -1 && retry_count <= MAX_RETRY && result {
+            let duration = u64::pow(2, retry_count as u32) * RETRY_DELAY;
             sleep(Duration::from_millis(duration));
             info!("Retrying call leg {} for address {} , {} times", self.uuid.clone(), self.address.clone(), retry_count);
 
