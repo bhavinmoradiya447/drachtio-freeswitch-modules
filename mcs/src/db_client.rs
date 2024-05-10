@@ -126,3 +126,59 @@ impl DbClient {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::db_client::{CallDetails, DbClient};
+
+    #[test]
+    fn test_db_operation() {
+        let mut db_client = DbClient::new();
+        let call_details1 = CallDetails {
+            call_leg_id: "leg1".to_string(),
+            client_address: "address1".to_string(),
+            codec: "codec1".to_string(),
+            mode: "mode1".to_string(),
+            metadata: "metadata1".to_string(),
+        };
+
+        let call_details2 = CallDetails {
+            call_leg_id: "leg2".to_string(),
+            client_address: "address2".to_string(),
+            codec: "codec2".to_string(),
+            mode: "mode2".to_string(),
+            metadata: "metadata2".to_string(),
+        };
+
+        let call_details3 = CallDetails {
+            call_leg_id: "leg2".to_string(),
+            client_address: "address21".to_string(),
+            codec: "codec2".to_string(),
+            mode: "mode2".to_string(),
+            metadata: "metadata2".to_string(),
+        };
+
+        db_client.insert(call_details1);
+
+        assert_eq!(1, db_client.select_all().len());
+        db_client.insert(call_details2);
+        assert_eq!(2, db_client.select_all().len());
+        db_client.insert(call_details3);
+        assert_eq!(3, db_client.select_all().len());
+
+        match db_client.select_by_call_id_and_address("leg2".to_string(), "address2".to_string()) {
+            Ok(Row) => { assert_eq!("leg2".to_string(), Row.call_leg_id); }
+            Err(_) => { assert!(false, "db row should exist"); } // dummy failures
+        }
+
+        match db_client.select_by_call_id_and_address("leg3".to_string(), "address3".to_string()) {
+            Ok(Row) => { assert!(false, "db row should not exist"); }
+            Err(e) => { assert!(true); } // dummy failures
+        }
+
+        db_client.delete_by_call_leg_id("leg1".to_string());
+        assert_eq!(2, db_client.select_all().len());
+        db_client.delete_by_call_leg_and_client_address("leg2".to_string(), "address21".to_string());
+        assert_eq!(1, db_client.select_all().len());
+    }
+}

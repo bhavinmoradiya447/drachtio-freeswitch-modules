@@ -1,6 +1,6 @@
 use std::time::Duration;
 use reqwest::Client;
-use tracing::{error, info};
+use tracing::error;
 use crate::CONFIG;
 
 #[derive(Debug)]
