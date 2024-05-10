@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::fs::OpenOptions;
+use std::future::Future;
 use std::io::Write;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
@@ -29,6 +30,7 @@ use tokio::sync::broadcast::Receiver;
 use tokio_util::sync::ReusableBoxFuture;
 use tonic::codegen::tokio_stream::{Stream, StreamExt};
 
+
 pub mod mcs {
     tonic::include_proto!("mcs");
 }
@@ -43,6 +45,7 @@ use crate::UuidChannels;
 use crate::CONFIG;
 use crate::db_client::{CallDetails, DbClient};
 use crate::fs_tcp_client::{get_event_command, get_start_failed_event_command, get_start_success_event_command, get_stop_failed_event_command, get_stop_success_event_command};
+use crate::http_client::HttpClient;
 
 #[derive(Debug, Default, Clone)]
 struct TokenInterceptor;
@@ -74,6 +77,7 @@ pub async fn start_http_server(
     let uuid_channels_clone = uuid_channels.clone();
     let event_sender_clone = event_sender.clone();
     let db_client_clone = db_client.clone();
+    let http_client = Arc::new(HttpClient::new());
 
 
     let with_uuid_channel = warp::any().map(move || Arc::clone(&uuid_channels));
@@ -83,15 +87,25 @@ pub async fn start_http_server(
     let address_client = Arc::new(Mutex::new(AddressClients::default()));
     let address_client_clone = address_client.clone();
     let with_address_client = warp::any().map(move || Arc::clone(&address_client));
+    let with_http_client = warp::any().map(move || Arc::clone(&http_client));
 
 
     let call_details = db_client_clone.select_all();
 
+    let http_client = http_client.clone();
     for call_detail in call_details.iter() {
-        let retry = Arc::new(Mutex::new(Retry { retry_count: 0 }));
-        start_cast(uuid_channels_clone.clone(), address_client_clone.clone(), event_sender_clone.clone(), db_client_clone.clone(),
-                   call_detail.call_leg_id.clone(), call_detail.client_address.clone(), call_detail.codec.clone(),
-                   call_detail.mode.clone(), call_detail.metadata.clone(), false, retry);
+        match http_client.is_call_leg_exist(call_detail.call_leg_id.clone()).await {
+            true => {
+                let retry = Arc::new(Mutex::new(Retry { retry_count: 0 }));
+                start_cast(uuid_channels_clone.clone(), address_client_clone.clone(), event_sender_clone.clone(), db_client_clone.clone(),
+                           call_detail.call_leg_id.clone(), call_detail.client_address.clone(), call_detail.codec.clone(),
+                           call_detail.mode.clone(), call_detail.metadata.clone(), false, retry, http_client.clone(),
+                );
+            }
+            false => {
+                db_client_clone.delete_by_call_leg_and_client_address(call_detail.call_leg_id.clone(), call_detail.client_address.clone());
+            }
+        }
     }
 
     let start_cast = warp::path!("start_cast")
@@ -101,6 +115,7 @@ pub async fn start_http_server(
         .and(with_address_client.clone())
         .and(with_event_sender.clone())
         .and(with_db_client.clone())
+        .and(with_http_client.clone())
         .and_then(start_cast_handler);
 
     let stop_cast = warp::path!("stop_cast")
@@ -229,6 +244,7 @@ async fn start_cast_handler(
     address_client: Arc<Mutex<AddressClients>>,
     event_sender: UnboundedSender<String>,
     db_client: Arc<DbClient>,
+    http_client: Arc<HttpClient>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let uuid = request.uuid.clone();
     let address = request.address.clone();
@@ -236,14 +252,15 @@ async fn start_cast_handler(
     let mode = request.mode.unwrap_or("combined".to_string());
     let metadata = request.metadata.unwrap_or("".to_string()).clone();
     let retry = Arc::new(Mutex::new(Retry { retry_count: 0 }));
-    start_cast(channels, address_client, event_sender, db_client, uuid, address, codec, mode, metadata, true, retry);
+    start_cast(channels, address_client, event_sender, db_client, uuid, address, codec, mode, metadata, true, retry, http_client);
     info!("returning ok");
     Ok(warp::reply::json(&"ok"))
 }
 
 fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<AddressClients>>,
               event_sender: UnboundedSender<String>, db_client: Arc<DbClient>, uuid: String,
-              address: String, codec: String, mode: String, metadata: String, insert_to_db: bool, retry: Arc<Mutex<Retry>>) {
+              address: String, codec: String, mode: String, metadata: String, insert_to_db: bool, retry: Arc<Mutex<Retry>>,
+              http_client: Arc<HttpClient>) {
     let count = COUNTER.fetch_add(1, SeqCst);
     let mode_clone = mode.clone();
     let uuid_clone = uuid.clone();
@@ -312,6 +329,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                                     mode_clone.clone(),
                                                     metadata_clone.clone(),
                                                     retry_clone,
+                                                    http_client.clone(),
     );
 
     let db_client_clone = db_client.clone();
@@ -631,6 +649,7 @@ struct CastStreamWithRetry<T> {
     mode: String,
     metadata: String,
     retry: Arc<Mutex<Retry>>,
+    http_client: Arc<HttpClient>,
 }
 
 /// An error returned from the inner stream of a [`CastStreamWithRetry`].
@@ -659,7 +678,8 @@ impl<T: 'static + Clone + Send> CastStreamWithRetry<T> {
                codec: String,
                mode: String,
                metadata: String,
-               retry: Arc<Mutex<Retry>>) -> Self {
+               retry: Arc<Mutex<Retry>>,
+               http_client: Arc<HttpClient>) -> Self {
         Self {
             inner: ReusableBoxFuture::new(make_future(rx)),
             channels,
@@ -672,6 +692,7 @@ impl<T: 'static + Clone + Send> CastStreamWithRetry<T> {
             mode,
             metadata,
             retry,
+            http_client,
         }
     }
 }
@@ -698,22 +719,32 @@ impl<T> Drop for CastStreamWithRetry<T> {
             let retry = self.retry.lock().unwrap();
             retry_count = retry.retry_count;
         }
-        if retry_count != -1 && retry_count < 5 {
+        let db_client = self.db_client.clone();
+        let http_client = self.http_client.clone();
+
+        let result = futures::executor::block_on(http_client.is_call_leg_exist(self.uuid.clone()));
+
+        if retry_count != -1 && retry_count < 5 && result {
             let duration = u64::pow(2, retry_count as u32) * 100;
             sleep(Duration::from_millis(duration));
             info!("Retrying call leg {} for address {} , {} times", self.uuid.clone(), self.address.clone(), retry_count);
-            let db_client = self.db_client.clone();
+
             if let Ok(_) = db_client.select_by_call_id_and_address(self.uuid.clone(), self.address.clone()) {
+                //http_client.is_call_leg_exist(self.uuid.clone())
                 start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
                            self.uuid.clone(), self.address.clone(), self.codec.clone(),
-                           self.mode.clone(), self.metadata.clone(), false, self.retry.clone());
+                           self.mode.clone(), self.metadata.clone(), false, self.retry.clone(),
+                           self.http_client.clone(),
+                );
             } else {
                 start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
                            self.uuid.clone(), self.address.clone(), self.codec.clone(),
-                           self.mode.clone(), self.metadata.clone(), true, self.retry.clone());
+                           self.mode.clone(), self.metadata.clone(), true, self.retry.clone(),
+                           self.http_client.clone(),
+                );
             }
         } else {
-            info!("Ignoring as retry exceeded");
+            info!("Ignoring as retry exceeded or call got hangup");
             let db_client = self.db_client.clone();
             db_client.delete_by_call_leg_and_client_address(self.uuid.clone(), self.address.clone());
         }

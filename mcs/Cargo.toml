@@ -37,6 +37,7 @@ serde_json = "1.0.114"
 utoipa = "4.2.0"
 utoipa-swagger-ui = "6.0.0"
 http = "1.0.0"
+reqwest = "0.12.4"
 
 # for config management
 config = "0.10"
@@ -44,6 +45,7 @@ lazy_static = "1.4.0"
 
 # TcpStream
 stubborn-io = "0.3.4"
+futures = "0.3.30"
 
 [build-dependencies]
 tonic-build = "0.10.2"

@@ -18,3 +18,7 @@ socket_file = "/usr/local/mcs/mcs-ds.sock"
 [fs_esl_client]
 host = "127.0.0.1:8021"
 auth = "ClueCon"
+
+[fs_http_client]
+user_name = "freeswitch"
+password = "QrFdTKD3m$b799Pq"

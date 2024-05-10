@@ -3,10 +3,12 @@ pub mod mcs {
 }
 
 mod http_server;
+
 mod settings;
 mod udp_server;
 mod fs_tcp_client;
 mod db_client;
+mod http_client;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

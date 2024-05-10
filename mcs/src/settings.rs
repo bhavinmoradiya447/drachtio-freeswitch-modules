@@ -2,6 +2,7 @@ use std::fmt;
 
 use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
+use utoipa::openapi::security::Password;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Log {
@@ -16,6 +17,13 @@ pub struct EslClient {
     pub host: String,
     pub auth: String,
 }
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct FsHttpClient {
+    pub user_name: String,
+    pub password: String
+}
+
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct HttpServer {
@@ -65,6 +73,7 @@ pub struct Settings {
     pub udp_server: UdpServer,
     pub env: ENV,
     pub fs_esl_client: EslClient,
+    pub fs_http_client: FsHttpClient
 }
 
 impl Settings {
