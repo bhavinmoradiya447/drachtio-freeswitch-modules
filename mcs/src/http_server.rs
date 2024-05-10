@@ -430,7 +430,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
             Err(e) => {
                 error!("Error connecting client {} , status: {}, message: {}", address_clone.clone(), e.code(), e.message());
 
-                let retry_clone = retry_clone_2.lock().unwrap();
+                let mut retry_clone = retry_clone_2.lock().unwrap();
                 let status_code = e.code();
                 if retry_clone.retry_count == MAX_RETRY ||
                     status_code == Cancelled ||
