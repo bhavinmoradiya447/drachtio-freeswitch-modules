@@ -164,7 +164,7 @@ async fn test() {
 
     let process_mcs_restart = process.clone();
     let t8 = std::thread::spawn(|| {
-        sleep(Duration::from_secs(300));
+        sleep(Duration::from_secs(10));
         test_mcs_restart_with_split_mulaw(process_mcs_restart);
     });
 
