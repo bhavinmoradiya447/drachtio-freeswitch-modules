@@ -2,6 +2,8 @@ use std::time::Duration;
 use httpclient::{Client, ResponseExt};
 use tracing::error;
 use crate::CONFIG;
+use base64::prelude::BASE64_STANDARD;
+use base64::write::EncoderWriter;
 
 #[derive(Debug)]
 pub struct HttpClient {
@@ -11,7 +13,7 @@ pub struct HttpClient {
 impl HttpClient {
     pub fn new() -> Self {
         Self {
-            client: httpclient::Client::new()
+            client: Client::new()
         }
     }
 
@@ -20,7 +22,8 @@ impl HttpClient {
             true
         } else {
             let request_url = &format!("http://127.0.0.1:7080/xmlapi/uuid_exists?{}", uuid);
-            match self.client.get(request_url).basic_auth("ZnJlZXN3aXRjaDpRckZkVEtEM20kYjc5OVBx")
+            match self.client.get(request_url).basic_auth(basic_auth(CONFIG.fs_http_client.user_name.clone(),
+                                                                     Some(CONFIG.fs_http_client.password.clone())).as_str())
                 .send().await {
                 Ok(res) => {
                     match res.status().is_success() {
@@ -47,5 +50,23 @@ impl HttpClient {
                 }
             }
         }
+    }
+}
+
+fn basic_auth<U, P>(username: U, password: Option<P>) -> String
+    where
+        U: std::fmt::Display,
+        P: std::fmt::Display,
+{
+    let mut buf = b"".to_vec();
+    {
+        let mut encoder = EncoderWriter::new(&mut buf, &BASE64_STANDARD);
+        let _ = write!(encoder, "{username}:");
+        if let Some(password) = password {
+            let _ = write!(encoder, "{password}");
+        }
+
+        let res = encoder.finish().unwrap();
+        String::from_utf8(res.to_vec()).unwrap().as_str()
     }
 }
