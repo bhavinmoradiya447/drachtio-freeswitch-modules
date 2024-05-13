@@ -8,7 +8,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use lazy_static::lazy_static;
 use log::Record;
-
+use serial_test::serial;
 use reqwest::blocking;
 use serde_json::json;
 use tracing::{error, info};
@@ -34,6 +34,7 @@ struct Process {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[serial]
 async fn test() {
     // init tracing
     tracing_subscriber::fmt::init();
@@ -149,7 +150,11 @@ async fn test() {
          rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
      }
 
+}
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
+#[serial]
+async fn test() {
     let process = Arc::new(Mutex::new(Process {
         mcs: run_bin("mcs".to_string()),
         record: run_bin("recorder".to_string()),

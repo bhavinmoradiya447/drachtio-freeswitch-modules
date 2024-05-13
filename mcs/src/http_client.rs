@@ -2,6 +2,7 @@ use std::time::Duration;
 use reqwest::Client;
 use tracing::error;
 use crate::CONFIG;
+use serial_test::serial;
 
 #[derive(Debug)]
 pub struct HttpClient {
