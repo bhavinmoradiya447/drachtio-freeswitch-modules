@@ -149,6 +149,13 @@ async fn test() {
         recorder_child.kill().expect("failed to terminate recorder");
         rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
     }
+
+    let map = GLOBAL_MAP.lock().unwrap();
+    info!("Event value map {:?}", map);
+    assert_eq!(&6, map.get("start").unwrap());
+    assert_eq!(&1, map.get("stop").unwrap());
+    assert_eq!(&3, map.get("failed").unwrap());
+    assert_eq!(&6, map.get("event").unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
