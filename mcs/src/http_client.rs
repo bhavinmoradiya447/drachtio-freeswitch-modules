@@ -5,6 +5,8 @@ use crate::CONFIG;
 use base64::prelude::BASE64_STANDARD;
 use base64::write::EncoderWriter;
 use std::io::Write;
+use tracing::log::trace;
+
 #[derive(Debug)]
 pub struct HttpClient {
     client: Client,
@@ -18,7 +20,8 @@ impl HttpClient {
     }
 
     pub async fn is_call_leg_exist(&self, uuid: String) -> bool {
-        if CONFIG.env.to_string().eq_ignore_ascii_case("development") {
+        trace!("Checking if call leg id {} present", uuid.clone());
+        let result = if CONFIG.env.to_string().eq_ignore_ascii_case("development") {
             true
         } else {
             let request_url = &format!("http://127.0.0.1:7080/xmlapi/uuid_exists?{}", uuid);
@@ -49,7 +52,9 @@ impl HttpClient {
                     false
                 }
             }
-        }
+        };
+        trace!("uuid {} present {}", uuid.clone(), result );
+        result
     }
 }
 

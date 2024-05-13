@@ -10,7 +10,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tonic::service::interceptor::InterceptedService;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Uri};
 use tonic::Status;
-use tracing::{error, info, instrument};
+use tracing::{error, info, instrument, trace};
 use utoipa::{OpenApi, ToSchema};
 use utoipa_swagger_ui::Config;
 use warp::{
@@ -725,11 +725,14 @@ impl<T: 'static + Clone + Send> Stream for CastStreamWithRetry<T> {
 
 impl<T> Drop for CastStreamWithRetry<T> {
     fn drop(&mut self) {
+        trace!("Inside Retry for call leg {}", self.uuid.clone());
         let retry_count;
         {
             let retry = self.retry.lock().unwrap();
             retry_count = retry.retry_count;
         }
+        trace!("Inside Retry for call leg {}, retry count : {}", self.uuid.clone(), retry_count);
+
         let db_client = self.db_client.clone();
         let http_client = self.http_client.clone();
 
