@@ -71,3 +71,13 @@ fn basic_auth<U, P>(username: U, password: Option<P>) -> String
         String::from_utf8(res.to_vec()).unwrap()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::http_client::basic_auth;
+
+    #[test]
+    fn test_basic_auth() {
+        assert_eq!("", basic_auth("freeswitch", Some("password")));
+    }
+}
