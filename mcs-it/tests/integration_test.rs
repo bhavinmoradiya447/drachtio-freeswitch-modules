@@ -2,6 +2,7 @@ use std::{path::PathBuf, process::Child};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
+use std::path::Path;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
@@ -37,9 +38,14 @@ struct Process {
 async fn test() {
     // init tracing
     tracing_subscriber::fmt::init();
+    if Path::new("/mcs/call-details-db").exists() {
+        std::fs::remove_file("/mcs/call-details-db").unwrap().expect("Failed to delete file");
+    }
 
-    let mut mcs_child = run_bin("mcs".to_string());
-    let mut recorder_child = run_bin("recorder".to_string());
+    let process = Arc::new(Mutex::new(Process {
+        mcs: run_bin("mcs".to_string()),
+        record: run_bin("recorder".to_string()),
+    }));
 
     tokio::spawn(async move {
         grpc_server::start_grpc_server().await.expect("TODO: panic message");
@@ -88,79 +94,67 @@ async fn test() {
 
     if let Err(e) = t1.join() {
         error!("Failed on T1 {:?}",  e);
-        mcs_child.kill().expect("failed to terminate mcs");
-        recorder_child.kill().expect("failed to terminate recorder");
+        let process = process.clone();
+        let mut process = process.lock().unwrap();
+        process.mcs.kill().expect("failed to terminate mcs");
+        process.record.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
     if let Err(e) = t2.join() {
         error!("Failed on T2 {:?}",  e);
-        mcs_child.kill().expect("failed to terminate mcs");
-        recorder_child.kill().expect("failed to terminate recorder");
+        let process = process.clone();
+        let mut process = process.lock().unwrap();
+        process.mcs.kill().expect("failed to terminate mcs");
+        process.record.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
     if let Err(e) = t3.join() {
         error!("Failed on T3 {:?}",  e);
-        mcs_child.kill().expect("failed to terminate mcs");
-        recorder_child.kill().expect("failed to terminate recorder");
+        let process = process.clone();
+        let mut process = process.lock().unwrap();
+        process.mcs.kill().expect("failed to terminate mcs");
+        process.record.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
     if let Err(e) = t4.join() {
         error!("Failed on T4 {:?}",  e);
-        mcs_child.kill().expect("failed to terminate mcs");
-        recorder_child.kill().expect("failed to terminate recorder");
+        let process = process.clone();
+        let mut process = process.lock().unwrap();
+        process.mcs.kill().expect("failed to terminate mcs");
+        process.record.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
     if let Err(e) = t5.join() {
         error!("Failed on T5 {:?}",  e);
-        mcs_child.kill().expect("failed to terminate mcs");
-        recorder_child.kill().expect("failed to terminate recorder");
+        let process = process.clone();
+        let mut process = process.lock().unwrap();
+        process.mcs.kill().expect("failed to terminate mcs");
+        process.record.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
     if let Err(e) = t6.join() {
         error!("Failed on T6 {:?}",  e);
-        mcs_child.kill().expect("failed to terminate mcs");
-        recorder_child.kill().expect("failed to terminate recorder");
+        let process = process.clone();
+        let mut process = process.lock().unwrap();
+        process.mcs.kill().expect("failed to terminate mcs");
+        process.record.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
 
     if let Err(e) = t7.join() {
         error!("Failed on T7 {:?}",  e);
-        mcs_child.kill().expect("failed to terminate mcs");
-        recorder_child.kill().expect("failed to terminate recorder");
+        let process = process.clone();
+        let mut process = process.lock().unwrap();
+        process.mcs.kill().expect("failed to terminate mcs");
+        process.record.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
 
-    if t0.is_finished() {
-        if let Err(e) = t0.join() {
-            error!("Failed on T0 {:?}", e);
-            mcs_child.kill().expect("failed to terminate mcs");
-            recorder_child.kill().expect("failed to terminate recorder");
-            panic!("{:?}", e);
-        }
-    } else {
-        // terminate the mcs and recorder binary
-        mcs_child.kill().expect("failed to terminate mcs");
-        recorder_child.kill().expect("failed to terminate recorder");
-        rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
-    }
-    let map = GLOBAL_MAP.lock().unwrap();
-    info!("Event value map {:?}", map);
-    assert_eq!(&6, map.get("start").unwrap());
-    assert_eq!(&1, map.get("stop").unwrap());
-    assert_eq!(&3, map.get("failed").unwrap());
-    assert_eq!(&6, map.get("event").unwrap());
-
-
-    tokio::time::sleep(Duration::from_secs(20)).await;
-    let process = Arc::new(Mutex::new(Process {
-        mcs: run_bin("mcs".to_string()),
-        record: run_bin("recorder".to_string()),
-    }));
 
 
     let process_mcs_restart = process.clone();
@@ -178,7 +172,26 @@ async fn test() {
         panic!("{:?}", e);
     }
 
+    if t0.is_finished() {
+        if let Err(e) = t0.join() {
+            error!("Failed on T0 {:?}", e);
+            let process = process.clone();
+            let mut process = process.lock().unwrap();
+            process.mcs.kill().expect("failed to terminate mcs");
+            process.record.kill().expect("failed to terminate recorder");
+            panic!("{:?}", e);
+        }
+    } else {
+        // terminate the mcs and recorder binary
+        let process = process.clone();
+        let mut process = process.lock().unwrap();
+        process.mcs.kill().expect("failed to terminate mcs");
+        process.record.kill().expect("failed to terminate recorder");
+        rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
+    }
+    let map = GLOBAL_MAP.lock().unwrap();
 
+    
     let map = GLOBAL_MAP.lock().unwrap();
     info!("Event value map {:?}", map);
     assert_eq!(&6, map.get("start").unwrap());
