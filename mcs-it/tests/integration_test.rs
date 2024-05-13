@@ -159,13 +159,30 @@ async fn test() {
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     let process_mcs_restart = process.clone();
+
     let t8 = std::thread::spawn(|| {
         sleep(Duration::from_secs(3));
-        test_mcs_restart_with_split_mulaw(process_mcs_restart);
+        test_recorder_restart_with_split_mulaw(process_mcs_restart);
     });
 
     if let Err(e) = t8.join() {
         error!("Failed on T8 {:?}",  e);
+        let process = process.clone();
+        let mut process = process.lock().unwrap();
+        process.mcs.kill().expect("failed to terminate mcs");
+        process.record.kill().expect("failed to terminate recorder");
+        panic!("{:?}", e);
+    }
+
+    let process_mcs_restart = process.clone();
+
+    let t9 = std::thread::spawn(|| {
+        sleep(Duration::from_secs(3));
+        test_mcs_restart_with_split_mulaw(process_mcs_restart);
+    });
+
+    if let Err(e) = t9.join() {
+        error!("Failed on T9 {:?}",  e);
         let process = process.clone();
         let mut process = process.lock().unwrap();
         process.mcs.kill().expect("failed to terminate mcs");
@@ -193,7 +210,7 @@ async fn test() {
 
     let map = GLOBAL_MAP.lock().unwrap();
     info!("Event value map {:?}", map);
-    assert_eq!(&6, map.get("start").unwrap());
+    assert_eq!(&8, map.get("start").unwrap());
     assert_eq!(&1, map.get("stop").unwrap());
     assert_eq!(&3, map.get("failed").unwrap());
     assert_eq!(&6, map.get("event").unwrap());
@@ -209,6 +226,17 @@ fn test_mcs_restart_with_split_mulaw(process: Arc<Mutex<Process>>) {
     cleanup(uuid);
     info!("split-mulaw test passed");
 }
+
+fn test_recorder_restart_with_split_mulaw(process: Arc<Mutex<Process>>) {
+    info!("testing recorder restart");
+    let uuid = uuid::Uuid::new_v4();
+    start_cast(uuid, "split".to_string(), "http://127.0.0.1:50051/".parse().unwrap());
+    stream_audio_and_restart_recorder(uuid, "./resources/test-input-mulaw.raw".to_string(), false, process);
+    //validate_split_output(uuid);
+    cleanup(uuid);
+    info!("split-mulaw test passed");
+}
+
 
 fn start_tcp_server(tx: Sender<TcpStream>) {
     let listener = TcpListener::bind("127.0.0.1:8022").unwrap();
@@ -554,6 +582,46 @@ fn stream_audio_and_restart_mcs(uuid: Uuid, file: String, segment: bool, process
     std::thread::sleep(std::time::Duration::from_secs(SLEEP_DURATION_SECS));
     drop(socket);
 }
+
+fn stream_audio_and_restart_recorder(uuid: Uuid, file: String, segment: bool, process: Arc<Mutex<Process>>) {
+    let input = std::fs::read(file).unwrap();
+    let mut socket = create_socket("/tmp/mcs.sock");
+
+    let mut seq: u32 = 0;
+    for chunk in input.chunks(CHUNK_SIZE) {
+        let payload = create_payload(uuid, seq, CHUNK_SIZE as u32, chunk);
+        socket.send(&payload).unwrap();
+        seq += 1;
+        sleep(Duration::from_millis(SLEEP_DURATION_MILLIS));
+        if seq == 10 {
+            let mut process = process.lock().unwrap();
+            process.record.kill().expect("failed to mcs Stop process");
+            process.record = run_bin("recorder".to_string());
+            sleep(Duration::from_secs(3));
+        }
+        if seq == 70 {
+            dispatch_event(uuid, "test-event".to_string());
+        }
+
+        if seq == 100 && segment {
+            stop_cast(uuid);
+            std::thread::sleep(std::time::Duration::from_millis(SLEEP_DURATION_MILLIS));
+        }
+    }
+
+    let payload = create_payload(uuid, seq, 0, &[]);
+    socket.send(&payload).unwrap();
+
+    info!(
+        "Sent final payload with seq: {}, for uuid: {}",
+        seq,
+        uuid.to_string()
+    );
+
+    std::thread::sleep(std::time::Duration::from_secs(SLEEP_DURATION_SECS));
+    drop(socket);
+}
+
 
 fn validate_output(uuid: Uuid) {
     // diff /tmp/rec-{uuid}.raw ./resources/test-input-mulaw.raw
