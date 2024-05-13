@@ -4,7 +4,7 @@ use tracing::error;
 use crate::CONFIG;
 use base64::prelude::BASE64_STANDARD;
 use base64::write::EncoderWriter;
-
+use std::io::Write;
 #[derive(Debug)]
 pub struct HttpClient {
     client: Client,
