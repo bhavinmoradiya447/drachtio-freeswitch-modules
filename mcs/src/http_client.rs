@@ -1,5 +1,4 @@
-use std::time::Duration;
-use tracing::{error, info, trace};
+use tracing::{error, trace};
 use crate::CONFIG;
 use base64::prelude::BASE64_STANDARD;
 use base64::write::EncoderWriter;
