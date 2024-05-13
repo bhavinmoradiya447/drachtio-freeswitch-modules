@@ -1,5 +1,5 @@
 use std::time::Duration;
-use reqwest::Client;
+use httpclient::{Client, ResponseExt};
 use tracing::error;
 use crate::CONFIG;
 
@@ -11,12 +11,7 @@ pub struct HttpClient {
 impl HttpClient {
     pub fn new() -> Self {
         Self {
-            client: Client::builder()
-                .connect_timeout(Duration::from_millis(5000))
-                .http2_keep_alive_while_idle(true)
-                .http2_keep_alive_timeout(Duration::from_millis(5000))
-                .http2_keep_alive_interval(Some(Duration::from_millis(10000)))
-                .build().unwrap()
+            client: httpclient::Client::new()
         }
     }
 
@@ -24,10 +19,8 @@ impl HttpClient {
         if CONFIG.env.to_string().eq_ignore_ascii_case("development") {
             true
         } else {
-            let request_url = format!("http://127.0.0.1:7080/xmlapi/uuid_exists?{}", uuid);
-            match self.client.get(request_url)
-                .basic_auth(CONFIG.fs_http_client.user_name.clone(), Some(CONFIG.fs_http_client.password.clone()))
-                .timeout(Duration::from_secs(3))
+            let request_url = &format!("http://127.0.0.1:7080/xmlapi/uuid_exists?{}", uuid);
+            match self.client.get(request_url).basic_auth("ZnJlZXN3aXRjaDpRckZkVEtEM20kYjc5OVBx")
                 .send().await {
                 Ok(res) => {
                     match res.status().is_success() {
