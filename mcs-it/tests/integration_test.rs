@@ -4,6 +4,8 @@ use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
+use std::thread::sleep;
+use std::time::Duration;
 use lazy_static::lazy_static;
 use log::Record;
 
@@ -162,6 +164,7 @@ async fn test() {
 
     let process_mcs_restart = process.clone();
     let t8 = std::thread::spawn(|| {
+        sleep(Duration::from_secs(300));
         test_mcs_restart_with_split_mulaw(process_mcs_restart);
     });
 
