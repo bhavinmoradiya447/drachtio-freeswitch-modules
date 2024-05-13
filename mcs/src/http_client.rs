@@ -3,6 +3,7 @@ use crate::CONFIG;
 use base64::prelude::BASE64_STANDARD;
 use base64::write::EncoderWriter;
 use std::io::Write;
+use std::time;
 
 #[derive(Debug)]
 pub struct HttpClient;
@@ -16,6 +17,7 @@ impl HttpClient {
             let request_url = format!("http://127.0.0.1:7080/xmlapi/uuid_exists?{}", uuid);
 
             let res = ureq::get(request_url.as_str())
+                .timeout(time::Duration::from_millis(3000))
                 .set("Authorization", format!("Basic {}",
                                               basic_auth(CONFIG.fs_http_client.user_name.clone(),
                                                          Some(CONFIG.fs_http_client.password.clone()))
