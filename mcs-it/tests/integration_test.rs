@@ -226,31 +226,33 @@ fn start_tcp_server(tx: Sender<TcpStream>) {
             let size = socket.read(&mut buf).unwrap();
             let event = String::from_utf8(buf[0..size].to_owned()).unwrap();
             info!("Got Command  {}", &event);
-            let mut map = GLOBAL_MAP.lock().unwrap();
-            if event.contains("mod_audio_cast::mcs::start") {
-                let value = match map.remove("start") {
-                    Some(v) => v,
-                    _ => 0
-                };
-                map.insert("start".parse().unwrap(), value + 1);
-            } else if event.contains("mod_audio_cast::mcs::stop") {
-                let value = match map.remove("stop") {
-                    Some(v) => v,
-                    _ => 0
-                };
-                map.insert("stop".parse().unwrap(), value + 1);
-            } else if event.contains("mod_audio_cast::mcs::failed") {
-                let value = match map.remove("failed") {
-                    Some(v) => v,
-                    _ => 0
-                };
-                map.insert("failed".parse().unwrap(), value + 1);
-            } else if event.contains("mod_audio_cast::mcs::event") {
-                let value = match map.remove("event") {
-                    Some(v) => v,
-                    _ => 0
-                };
-                map.insert("event".parse().unwrap(), value + 1);
+            {
+                let mut map = GLOBAL_MAP.lock().unwrap();
+                if event.contains("mod_audio_cast::mcs::start") {
+                    let value = match map.remove("start") {
+                        Some(v) => v,
+                        _ => 0
+                    };
+                    map.insert("start".parse().unwrap(), value + 1);
+                } else if event.contains("mod_audio_cast::mcs::stop") {
+                    let value = match map.remove("stop") {
+                        Some(v) => v,
+                        _ => 0
+                    };
+                    map.insert("stop".parse().unwrap(), value + 1);
+                } else if event.contains("mod_audio_cast::mcs::failed") {
+                    let value = match map.remove("failed") {
+                        Some(v) => v,
+                        _ => 0
+                    };
+                    map.insert("failed".parse().unwrap(), value + 1);
+                } else if event.contains("mod_audio_cast::mcs::event") {
+                    let value = match map.remove("event") {
+                        Some(v) => v,
+                        _ => 0
+                    };
+                    map.insert("event".parse().unwrap(), value + 1);
+                }
             }
             socket.write_all("Content-Type: command/reply\nReply-Text: +OK accepted".as_bytes()).unwrap();
         }
