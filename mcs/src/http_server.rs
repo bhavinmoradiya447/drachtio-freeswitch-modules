@@ -741,7 +741,6 @@ impl<T> Drop for CastStreamWithRetry<T> {
             info!("Retrying call leg {} for address {} , {} times", self.uuid.clone(), self.address.clone(), retry_count);
 
             if let Ok(_) = db_client.select_by_call_id_and_address(self.uuid.clone(), self.address.clone()) {
-                //http_client.is_call_leg_exist(self.uuid.clone())
                 start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
                            self.uuid.clone(), self.address.clone(), self.codec.clone(),
                            self.mode.clone(), self.metadata.clone(), false, self.retry.clone(),
