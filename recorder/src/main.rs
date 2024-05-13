@@ -1,7 +1,5 @@
 use std::{collections::HashMap, fs::File, io::Write};
-use std::time::Duration;
 use tokio;
-use tokio::time::sleep;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Request, Response, Status, Streaming};
 
@@ -37,7 +35,6 @@ impl MediaCastService for MediaCastServiceImpl {
             while let Some(payload) = stream.message().await.unwrap() {
                 // println!("[debug] seq: {}, size: {}", payload.seq, payload.size);
                 // if uuid does not exist in map create file
-                println!("[info] got type: {}, left : {}, right: {}, audio: {}", payload.payload_type, payload.audio_left.len(), payload.audio_right.len(), payload.audio.len());
                 if payload.event_data.len() > 0 {
                     println!("[info] got event data: {}", payload.event_data);
                 }
@@ -50,16 +47,16 @@ impl MediaCastService for MediaCastServiceImpl {
                     let mut right_file =
                         File::create(format!("/tmp/rec-{}-right.raw", payload.uuid)).unwrap();
                     file.write_all(payload.audio.as_slice()).unwrap();
-                    left_file.write_all(payload.audio_left.as_slice()).unwrap();
-                    right_file.write_all(payload.audio_right.as_slice()).unwrap();
+                    left_file.write_all(&payload.audio_left).unwrap();
+                    right_file.write_all(&payload.audio_right).unwrap();
                     files.insert(payload.uuid.clone(), file);
                     left_files.insert(payload.uuid.clone(), left_file);
                     right_files.insert(payload.uuid, right_file);
                 } else {
                     if payload.payload_type
                         == <DialogRequestPayloadType as Into<i32>>::into(
-                        DialogRequestPayloadType::AudioStop,
-                    )
+                            DialogRequestPayloadType::AudioStop,
+                        )
                     {
                         // close file
                         println!("[info] closing file: /tmp/rec-{}.raw", payload.uuid);
@@ -75,9 +72,9 @@ impl MediaCastService for MediaCastServiceImpl {
                         let mut file = files.get(&payload.uuid).unwrap();
                         file.write_all(payload.audio.as_slice()).unwrap();
                         let mut left_file = left_files.get(&payload.uuid).unwrap();
-                        left_file.write_all(payload.audio_left.as_slice()).unwrap();
+                        left_file.write_all(&payload.audio_left).unwrap();
                         let mut right_file = right_files.get(&payload.uuid).unwrap();
-                        right_file.write_all(payload.audio_right.as_slice()).unwrap();
+                        right_file.write_all(&payload.audio_right).unwrap();
                     }
                 }
             }
@@ -86,17 +83,14 @@ impl MediaCastService for MediaCastServiceImpl {
         // create a receiver stream to return
         let (tx, rx) = tokio::sync::mpsc::channel(4);
         tokio::spawn(async move {
-          //  for i in 1..10000 {
-                let response = DialogResponsePayload {
-                    payload_type: <DialogResponsePayloadType as Into<i32>>::into(
-                        DialogResponsePayloadType::Event,
-                    ),
-                    audio: Vec::new(),
-                    data: String::from("recording started"),
-                };
-                tx.send(Ok(response)).await.unwrap();
-             //   sleep(Duration::from_secs(1)).await;
-           // }
+            let response = DialogResponsePayload {
+                payload_type: <DialogResponsePayloadType as Into<i32>>::into(
+                    DialogResponsePayloadType::ResponseEnd,
+                ),
+                audio: Vec::new(),
+                data: String::from("recording started"),
+            };
+            tx.send(Ok(response)).await.unwrap();
         });
 
         Ok(Response::new(ReceiverStream::new(rx)))
