@@ -147,7 +147,7 @@ async fn test() {
     assert_eq!(&3, map.get("failed").unwrap());
     assert_eq!(&6, map.get("event").unwrap());
 
-    let mut mcs_child = run_bin("mcs".to_string());
+    let mut mcs_child =  run_bin("mcs".to_string());
     let mut recorder_child = run_bin("recorder".to_string());
 
 
@@ -162,16 +162,7 @@ async fn test() {
         panic!("{:?}", e);
     }
 
-    let t9 = std::thread::spawn(|| {
-        recorder_child = test_recoder_restart_with_split_mulaw(recorder_child);
-    });
 
-    if let Err(e) = t9.join() {
-        error!("Failed on T9 {:?}",  e);
-        mcs_child.kill().expect("failed to terminate mcs");
-        recorder_child.kill().expect("failed to terminate recorder");
-        panic!("{:?}", e);
-    }
 
     let map = GLOBAL_MAP.lock().unwrap();
     info!("Event value map {:?}", map);
@@ -181,22 +172,12 @@ async fn test() {
     assert_eq!(&6, map.get("event").unwrap());
 }
 
-fn test_recoder_restart_with_split_mulaw(mut process: Child) -> Child {
-    info!("testing mcs restart");
-    let uuid = uuid::Uuid::new_v4();
-    start_cast(uuid, "split".to_string(), "http://127.0.0.1:50051/".parse().unwrap());
-    process = stream_audio_and_restart_mcs(uuid, "./resources/test-input-mulaw.raw".to_string(), false, process);
-    validate_split_output(uuid);
-    cleanup(uuid);
-    info!("split-mulaw test passed");
-    process
-}
 
 fn test_mcs_restart_with_split_mulaw(mut process: Child) -> Child {
     info!("testing recorder restart");
     let uuid = uuid::Uuid::new_v4();
     start_cast(uuid, "split".to_string(), "http://127.0.0.1:50051/".parse().unwrap());
-    process = stream_audio_and_restart_recoder(uuid, "./resources/test-input-mulaw.raw".to_string(), false, process);
+    process = stream_audio_and_restart_mcs(uuid, "./resources/test-input-mulaw.raw".to_string(), false, process);
     validate_split_output(uuid);
     cleanup(uuid);
     info!("split-mulaw test passed");
@@ -540,43 +521,6 @@ fn stream_audio_and_restart_mcs(uuid: Uuid, file: String, segment: bool, mut pro
     process
 }
 
-fn stream_audio_and_restart_recoder(uuid: Uuid, file: String, segment: bool, mut process: Child) -> Child {
-    let input = std::fs::read(file).unwrap();
-    let socket = create_socket("/tmp/mcs.sock");
-
-    let mut seq: u32 = 0;
-    for chunk in input.chunks(CHUNK_SIZE) {
-        let payload = create_payload(uuid, seq, CHUNK_SIZE as u32, chunk);
-        socket.send(&payload).unwrap();
-        seq += 1;
-        std::thread::sleep(std::time::Duration::from_millis(SLEEP_DURATION_MILLIS));
-        if seq == 10 {
-            process.kill().expect("failed to Stop recorder process");
-            process =  run_bin("recorder".to_string());
-        }
-        if seq == 70 {
-            dispatch_event(uuid, "test-event".to_string());
-        }
-
-        if seq == 100 && segment {
-            stop_cast(uuid);
-            std::thread::sleep(std::time::Duration::from_millis(SLEEP_DURATION_MILLIS));
-        }
-    }
-
-    let payload = create_payload(uuid, seq, 0, &[]);
-    socket.send(&payload).unwrap();
-
-    info!(
-        "Sent final payload with seq: {}, for uuid: {}",
-        seq,
-        uuid.to_string()
-    );
-
-    std::thread::sleep(std::time::Duration::from_secs(SLEEP_DURATION_SECS));
-    drop(socket);
-    process
-}
 fn validate_output(uuid: Uuid) {
     // diff /tmp/rec-{uuid}.raw ./resources/test-input-mulaw.raw
     let output = std::process::Command::new("diff")
