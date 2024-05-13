@@ -39,7 +39,7 @@ async fn test() {
     // init tracing
     tracing_subscriber::fmt::init();
     if Path::new("/mcs/call-details-db").exists() {
-        std::fs::remove_file("/mcs/call-details-db").unwrap().expect("Failed to delete file");
+        std::fs::remove_file("/mcs/call-details-db").unwrap();
     }
 
     let process = Arc::new(Mutex::new(Process {
@@ -191,7 +191,7 @@ async fn test() {
     }
     let map = GLOBAL_MAP.lock().unwrap();
 
-    
+
     let map = GLOBAL_MAP.lock().unwrap();
     info!("Event value map {:?}", map);
     assert_eq!(&6, map.get("start").unwrap());
