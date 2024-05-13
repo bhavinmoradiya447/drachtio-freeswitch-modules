@@ -67,6 +67,6 @@ fn basic_auth<U, P>(username: U, password: Option<P>) -> String
         }
 
         let res = encoder.finish().unwrap();
-        String::from_utf8(res.to_vec()).unwrap().as_str()
+        String::from_utf8(res.to_vec()).unwrap()
     }
 }
