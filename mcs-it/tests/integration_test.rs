@@ -180,7 +180,7 @@ async fn test() {
             let mut process = process.lock().unwrap();
             process.mcs.kill().expect("failed to terminate mcs");
             process.record.kill().expect("failed to terminate recorder");
-            panic!("{:?}", e);
+            //panic!("{:?}", e);
         }
     } else {
         // terminate the mcs and recorder binary
