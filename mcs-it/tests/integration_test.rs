@@ -156,6 +156,7 @@ async fn test() {
     }
 
 
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     let process_mcs_restart = process.clone();
     let t8 = std::thread::spawn(|| {
@@ -189,8 +190,6 @@ async fn test() {
         process.record.kill().expect("failed to terminate recorder");
         rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
     }
-    let map = GLOBAL_MAP.lock().unwrap();
-
 
     let map = GLOBAL_MAP.lock().unwrap();
     info!("Event value map {:?}", map);
