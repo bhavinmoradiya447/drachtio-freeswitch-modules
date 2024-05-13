@@ -8,7 +8,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use lazy_static::lazy_static;
 use log::Record;
-use serial_test::serial;
+
 use reqwest::blocking;
 use serde_json::json;
 use tracing::{error, info};
@@ -34,7 +34,6 @@ struct Process {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-#[serial]
 async fn test() {
     // init tracing
     tracing_subscriber::fmt::init();
@@ -149,19 +148,15 @@ async fn test() {
         recorder_child.kill().expect("failed to terminate recorder");
         rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
     }
-
     let map = GLOBAL_MAP.lock().unwrap();
     info!("Event value map {:?}", map);
     assert_eq!(&6, map.get("start").unwrap());
     assert_eq!(&1, map.get("stop").unwrap());
     assert_eq!(&3, map.get("failed").unwrap());
     assert_eq!(&6, map.get("event").unwrap());
-}
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 10)]
-#[serial]
-async fn test_restart() {
-    info!("running restart test");
+
+    tokio::time::sleep(Duration::from_secs(20)).await;
     let process = Arc::new(Mutex::new(Process {
         mcs: run_bin("mcs".to_string()),
         record: run_bin("recorder".to_string()),
