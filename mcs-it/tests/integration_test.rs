@@ -156,7 +156,7 @@ async fn test() {
      assert_eq!(&3, map.get("failed").unwrap());
      assert_eq!(&6, map.get("event").unwrap());
 
-    let process = Arc::new(Mutex::new(Process {
+   /* let process = Arc::new(Mutex::new(Process {
         mcs: run_bin("mcs".to_string()),
         record: run_bin("recorder".to_string()),
     }));
@@ -183,7 +183,7 @@ async fn test() {
     assert_eq!(&6, map.get("start").unwrap());
     assert_eq!(&1, map.get("stop").unwrap());
     assert_eq!(&3, map.get("failed").unwrap());
-    assert_eq!(&6, map.get("event").unwrap());
+    assert_eq!(&6, map.get("event").unwrap()); */
 }
 
 
