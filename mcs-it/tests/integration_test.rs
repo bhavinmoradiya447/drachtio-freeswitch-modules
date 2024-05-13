@@ -188,7 +188,7 @@ async fn test() {
         let mut process = process.lock().unwrap();
         process.mcs.kill().expect("failed to terminate mcs");
         process.record.kill().expect("failed to terminate recorder");
-        rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
+        //rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
     }
 
     let map = GLOBAL_MAP.lock().unwrap();
