@@ -21,7 +21,7 @@ impl HttpClient {
 
     pub async fn is_call_leg_exist(&self, uuid: String) -> bool {
         info!("Checking if call leg id {} present", uuid.clone());
-        let result = if CONFIG.env.to_string().eq_ignore_ascii_case("development") {
+        /*let result = if CONFIG.env.to_string().eq_ignore_ascii_case("development") {
             true
         } else {
             let request_url = &format!("http://127.0.0.1:7080/xmlapi/uuid_exists?{}", uuid);
@@ -54,8 +54,10 @@ impl HttpClient {
             }
         };
         info!("uuid {} present {}", uuid.clone(), result );
-        result
+        result */
+        true
     }
+
 }
 
 fn basic_auth<U, P>(username: U, password: Option<P>) -> String
