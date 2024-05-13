@@ -168,7 +168,7 @@ async fn test() {
     if let Err(e) = t8.join() {
         error!("Failed on T8 {:?}",  e);
         let process = process.clone();
-        let process = process.lock().unwrap();
+        let mut process = process.lock().unwrap();
         process.mcs.kill().expect("failed to terminate mcs");
         process.record.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
@@ -493,7 +493,7 @@ fn stream_audio(uuid: Uuid, file: String, segment: bool) {
     drop(socket);
 }
 
-fn stream_audio_and_restart_mcs(uuid: Uuid, file: String, segment: bool, mut process: Arc<Mutex<Process>>) {
+fn stream_audio_and_restart_mcs(uuid: Uuid, file: String, segment: bool, process: Arc<Mutex<Process>>) {
     let input = std::fs::read(file).unwrap();
     let socket = create_socket("/tmp/mcs.sock");
 
