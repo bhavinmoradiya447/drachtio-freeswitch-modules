@@ -212,54 +212,58 @@ fn test_mcs_restart_with_split_mulaw(process: Arc<Mutex<Process>>) {
 
 fn start_tcp_server(tx: Sender<TcpStream>) {
     let listener = TcpListener::bind("127.0.0.1:8022").unwrap();
-
-    let (mut socket, _) = listener.accept().unwrap();
-    tx.send(socket.try_clone().unwrap()).unwrap();
-    socket.set_nodelay(true).unwrap();
-    socket.write_all("Content-Type: auth/request".as_bytes()).unwrap();
-    let mut buf = [0; 100];
-    let size = socket.read(&mut buf).unwrap();
-    if String::from_utf8(buf[0..size].to_owned()).unwrap().contains("auth Lcqzoc4e!zk3C3!#") {
-        socket.write_all("Reply-Text: +OK accepted".as_bytes()).unwrap();
-        loop {
-            let mut buf = [0; 1021];
-            let size = socket.read(&mut buf).unwrap();
-            let event = String::from_utf8(buf[0..size].to_owned()).unwrap();
-            info!("Got Command  {}", &event);
-            {
-                let mut map = GLOBAL_MAP.lock().unwrap();
-                if event.contains("mod_audio_cast::mcs::start") {
-                    let value = match map.remove("start") {
-                        Some(v) => v,
-                        _ => 0
-                    };
-                    map.insert("start".parse().unwrap(), value + 1);
-                } else if event.contains("mod_audio_cast::mcs::stop") {
-                    let value = match map.remove("stop") {
-                        Some(v) => v,
-                        _ => 0
-                    };
-                    map.insert("stop".parse().unwrap(), value + 1);
-                } else if event.contains("mod_audio_cast::mcs::failed") {
-                    let value = match map.remove("failed") {
-                        Some(v) => v,
-                        _ => 0
-                    };
-                    map.insert("failed".parse().unwrap(), value + 1);
-                } else if event.contains("mod_audio_cast::mcs::event") {
-                    let value = match map.remove("event") {
-                        Some(v) => v,
-                        _ => 0
-                    };
-                    map.insert("event".parse().unwrap(), value + 1);
+    'socket_creation: loop {
+        let (mut socket, _) = listener.accept().unwrap();
+        tx.send(socket.try_clone().unwrap()).unwrap();
+        socket.set_nodelay(true).unwrap();
+        socket.write_all("Content-Type: auth/request".as_bytes()).unwrap();
+        let mut buf = [0; 100];
+        let size = socket.read(&mut buf).unwrap();
+        if String::from_utf8(buf[0..size].to_owned()).unwrap().contains("auth Lcqzoc4e!zk3C3!#") {
+            socket.write_all("Reply-Text: +OK accepted".as_bytes()).unwrap();
+            loop {
+                let mut buf = [0; 1021];
+                let size = socket.read(&mut buf).unwrap();
+                let event = String::from_utf8(buf[0..size].to_owned()).unwrap();
+                info!("Got Command  {}", &event);
+                {
+                    let mut map = GLOBAL_MAP.lock().unwrap();
+                    if event.contains("mod_audio_cast::mcs::start") {
+                        let value = match map.remove("start") {
+                            Some(v) => v,
+                            _ => 0
+                        };
+                        map.insert("start".parse().unwrap(), value + 1);
+                    } else if event.contains("mod_audio_cast::mcs::stop") {
+                        let value = match map.remove("stop") {
+                            Some(v) => v,
+                            _ => 0
+                        };
+                        map.insert("stop".parse().unwrap(), value + 1);
+                    } else if event.contains("mod_audio_cast::mcs::failed") {
+                        let value = match map.remove("failed") {
+                            Some(v) => v,
+                            _ => 0
+                        };
+                        map.insert("failed".parse().unwrap(), value + 1);
+                    } else if event.contains("mod_audio_cast::mcs::event") {
+                        let value = match map.remove("event") {
+                            Some(v) => v,
+                            _ => 0
+                        };
+                        map.insert("event".parse().unwrap(), value + 1);
+                    }
                 }
+                match socket.write_all("Content-Type: command/reply\nReply-Text: +OK accepted".as_bytes()) {
+                    Ok(_) => {}
+                    Err(_) => { continue 'socket_creation; }
+                };
             }
-            socket.write_all("Content-Type: command/reply\nReply-Text: +OK accepted".as_bytes()).unwrap();
+        } else {
+            socket.write_all("-ERR Command not found!".as_bytes()).unwrap();
+            assert!(false, "Unauthorized");
+            socket.shutdown(Shutdown::Both).unwrap();
         }
-    } else {
-        socket.write_all("-ERR Command not found!".as_bytes()).unwrap();
-        assert!(false, "Unauthorized");
-        socket.shutdown(Shutdown::Both).unwrap();
     }
 }
 
