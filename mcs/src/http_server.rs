@@ -80,7 +80,7 @@ pub async fn start_http_server(
     let uuid_channels_clone = uuid_channels.clone();
     let event_sender_clone = event_sender.clone();
     let db_client_clone = db_client.clone();
-    let http_client = Arc::new(HttpClient::new());
+    let http_client = Arc::new(HttpClient);
     let http_client_clone = http_client.clone();
 
     let with_uuid_channel = warp::any().map(move || Arc::clone(&uuid_channels));
@@ -97,7 +97,7 @@ pub async fn start_http_server(
 
     let http_client = http_client_clone;
     for call_detail in call_details.iter() {
-        match http_client.is_call_leg_exist(call_detail.call_leg_id.clone()).await {
+        match http_client.is_call_leg_exist(call_detail.call_leg_id.clone()) {
             true => {
                 let retry = Arc::new(Mutex::new(Retry { retry_count: 0 }));
                 start_cast(uuid_channels_clone.clone(), address_client_clone.clone(), event_sender_clone.clone(), db_client_clone.clone(),
@@ -736,7 +736,7 @@ impl<T> Drop for CastStreamWithRetry<T> {
         let db_client = self.db_client.clone();
         let http_client = self.http_client.clone();
 
-        let result = futures::executor::block_on(http_client.is_call_leg_exist(self.uuid.clone()));
+        let result = http_client.is_call_leg_exist(self.uuid.clone());
 
         if retry_count != -1 && retry_count <= MAX_RETRY && result {
             let duration = u64::pow(2, retry_count as u32) * RETRY_DELAY;

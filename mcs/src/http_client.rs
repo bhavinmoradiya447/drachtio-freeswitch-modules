@@ -1,5 +1,4 @@
 use std::time::Duration;
-use httpclient::{Client, ResponseExt};
 use tracing::{error, info};
 use crate::CONFIG;
 use base64::prelude::BASE64_STANDARD;
@@ -8,30 +7,27 @@ use std::io::Write;
 use tracing::log::trace;
 
 #[derive(Debug)]
-pub struct HttpClient {
-    client: Client,
-}
+pub struct HttpClient;
 
 impl HttpClient {
-    pub fn new() -> Self {
-        Self {
-            client: Client::new()
-        }
-    }
-
-    pub async fn is_call_leg_exist(&self, uuid: String) -> bool {
+    pub fn is_call_leg_exist(&self, uuid: String) -> bool {
         info!("Checking if call leg id {} present", uuid.clone());
-        /*let result = if CONFIG.env.to_string().eq_ignore_ascii_case("development") {
+        let result = if CONFIG.env.to_string().eq_ignore_ascii_case("development") {
             true
         } else {
-            let request_url = &format!("http://127.0.0.1:7080/xmlapi/uuid_exists?{}", uuid);
-            match self.client.get(request_url).basic_auth(basic_auth(CONFIG.fs_http_client.user_name.clone(),
-                                                                     Some(CONFIG.fs_http_client.password.clone())).as_str())
-                .send().await {
+            let request_url = format!("http://127.0.0.1:7080/xmlapi/uuid_exists?{}", uuid);
+
+            let res = ureq::get(request_url.as_str())
+                .set("Authorization", format!("Basic {}",
+                                              basic_auth(CONFIG.fs_http_client.user_name.clone(),
+                                                         Some(CONFIG.fs_http_client.password.clone()))
+                                                  .as_str()).as_str()).call();
+
+            match res {
                 Ok(res) => {
-                    match res.status().is_success() {
+                    match res.status() >= 200 && res.status() < 300 {
                         true => {
-                            match res.text().await {
+                            match res.into_string() {
                                 Ok(body) => {
                                     match body.as_str() {
                                         "true" => { true }
@@ -54,10 +50,8 @@ impl HttpClient {
             }
         };
         info!("uuid {} present {}", uuid.clone(), result );
-        result */
-        true
+        result
     }
-
 }
 
 fn basic_auth<U, P>(username: U, password: Option<P>) -> String

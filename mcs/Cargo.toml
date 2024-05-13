@@ -37,7 +37,7 @@ serde_json = "1.0.114"
 utoipa = "4.2.0"
 utoipa-swagger-ui = "6.0.0"
 http = "1.0.0"
-httpclient = "0.22.1"
+ureq = "2.9.7"
 
 # for config management
 config = "0.10"
@@ -45,7 +45,6 @@ lazy_static = "1.4.0"
 
 # TcpStream
 stubborn-io = "0.3.4"
-futures = "0.3.30"
 base64 = "0.21.7"
 
 [build-dependencies]
