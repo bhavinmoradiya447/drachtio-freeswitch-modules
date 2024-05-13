@@ -78,6 +78,6 @@ mod tests {
 
     #[test]
     fn test_basic_auth() {
-        assert_eq!("", basic_auth("freeswitch", Some("password")));
+        assert_eq!("ZnJlZXN3aXRjaDpwYXNzd29yZA==", basic_auth("freeswitch", Some("password")));
     }
 }
