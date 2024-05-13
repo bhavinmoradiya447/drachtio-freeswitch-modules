@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::sync::mpsc::Sender;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use lazy_static::lazy_static;
+use log::Record;
 
 use reqwest::blocking;
 use serde_json::json;
@@ -24,6 +25,12 @@ static ref GLOBAL_MAP: Mutex<HashMap<String, i32>> = {
 Mutex::new(HashMap::new())};
 
 }
+
+struct Process {
+    mcs: Child,
+    record: Child,
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 async fn test() {
     // init tracing
@@ -147,21 +154,25 @@ async fn test() {
     assert_eq!(&3, map.get("failed").unwrap());
     assert_eq!(&6, map.get("event").unwrap());
 
-    let mut mcs_child =  run_bin("mcs".to_string());
-    let mut recorder_child = run_bin("recorder".to_string());
+    let process = Arc::new(Mutex::new(Process {
+        mcs: run_bin("mcs".to_string()),
+        record: run_bin("recorder".to_string()),
+    }));
 
 
+    let process_mcs_restart = process.clone();
     let t8 = std::thread::spawn(|| {
-        mcs_child = test_mcs_restart_with_split_mulaw(mcs_child);
+        test_mcs_restart_with_split_mulaw(process_mcs_restart);
     });
 
     if let Err(e) = t8.join() {
         error!("Failed on T8 {:?}",  e);
-        mcs_child.kill().expect("failed to terminate mcs");
-        recorder_child.kill().expect("failed to terminate recorder");
+        let process = process.clone();
+        let process = process.lock().unwrap();
+        process.mcs.kill().expect("failed to terminate mcs");
+        process.record.kill().expect("failed to terminate recorder");
         panic!("{:?}", e);
     }
-
 
 
     let map = GLOBAL_MAP.lock().unwrap();
@@ -173,15 +184,14 @@ async fn test() {
 }
 
 
-fn test_mcs_restart_with_split_mulaw(mut process: Child) -> Child {
+fn test_mcs_restart_with_split_mulaw(process: Arc<Mutex<Process>>) {
     info!("testing recorder restart");
     let uuid = uuid::Uuid::new_v4();
     start_cast(uuid, "split".to_string(), "http://127.0.0.1:50051/".parse().unwrap());
-    process = stream_audio_and_restart_mcs(uuid, "./resources/test-input-mulaw.raw".to_string(), false, process);
+    stream_audio_and_restart_mcs(uuid, "./resources/test-input-mulaw.raw".to_string(), false, process);
     validate_split_output(uuid);
     cleanup(uuid);
     info!("split-mulaw test passed");
-    process
 }
 
 fn start_tcp_server(tx: Sender<TcpStream>) {
@@ -483,7 +493,7 @@ fn stream_audio(uuid: Uuid, file: String, segment: bool) {
     drop(socket);
 }
 
-fn stream_audio_and_restart_mcs(uuid: Uuid, file: String, segment: bool, mut process: Child) -> Child {
+fn stream_audio_and_restart_mcs(uuid: Uuid, file: String, segment: bool, mut process: Arc<Mutex<Process>>) {
     let input = std::fs::read(file).unwrap();
     let socket = create_socket("/tmp/mcs.sock");
 
@@ -494,8 +504,9 @@ fn stream_audio_and_restart_mcs(uuid: Uuid, file: String, segment: bool, mut pro
         seq += 1;
         std::thread::sleep(std::time::Duration::from_millis(SLEEP_DURATION_MILLIS));
         if seq == 10 {
-            process.kill().expect("failed to mcs Stop process");
-            process =  run_bin("mcs".to_string());
+            let mut process = process.lock().unwrap();
+            process.mcs.kill().expect("failed to mcs Stop process");
+            process.mcs = run_bin("mcs".to_string());
         }
         if seq == 70 {
             dispatch_event(uuid, "test-event".to_string());
@@ -518,7 +529,6 @@ fn stream_audio_and_restart_mcs(uuid: Uuid, file: String, segment: bool, mut pro
 
     std::thread::sleep(std::time::Duration::from_secs(SLEEP_DURATION_SECS));
     drop(socket);
-    process
 }
 
 fn validate_output(uuid: Uuid) {
