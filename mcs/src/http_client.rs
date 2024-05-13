@@ -1,17 +1,16 @@
 use std::time::Duration;
-use tracing::{error, info};
+use tracing::{error, info, trace};
 use crate::CONFIG;
 use base64::prelude::BASE64_STANDARD;
 use base64::write::EncoderWriter;
 use std::io::Write;
-use tracing::log::trace;
 
 #[derive(Debug)]
 pub struct HttpClient;
 
 impl HttpClient {
     pub fn is_call_leg_exist(&self, uuid: String) -> bool {
-        info!("Checking if call leg id {} present", uuid.clone());
+        trace!("Checking if call leg id {} present", uuid.clone());
         let result = if CONFIG.env.to_string().eq_ignore_ascii_case("development") {
             true
         } else {
@@ -49,7 +48,7 @@ impl HttpClient {
                 }
             }
         };
-        info!("uuid {} present {}", uuid.clone(), result );
+        trace!("uuid {} present {}", uuid.clone(), result );
         result
     }
 }

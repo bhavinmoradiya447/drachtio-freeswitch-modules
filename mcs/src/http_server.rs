@@ -725,13 +725,13 @@ impl<T: 'static + Clone + Send> Stream for CastStreamWithRetry<T> {
 
 impl<T> Drop for CastStreamWithRetry<T> {
     fn drop(&mut self) {
-        info!("Inside Retry for call leg {}", self.uuid.clone());
+        trace!("Inside Retry for call leg {}", self.uuid.clone());
         let retry_count;
         {
             let retry = self.retry.lock().unwrap();
             retry_count = retry.retry_count;
         }
-        info!("Inside Retry for call leg {}, retry count : {}", self.uuid.clone(), retry_count);
+        trace!("Inside Retry for call leg {}, retry count : {}", self.uuid.clone(), retry_count);
 
         let db_client = self.db_client.clone();
         let http_client = self.http_client.clone();
