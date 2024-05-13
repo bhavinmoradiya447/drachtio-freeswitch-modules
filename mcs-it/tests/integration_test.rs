@@ -39,122 +39,122 @@ async fn test() {
     // init tracing
     tracing_subscriber::fmt::init();
 
-     let mut mcs_child = run_bin("mcs".to_string());
-     let mut recorder_child = run_bin("recorder".to_string());
+    let mut mcs_child = run_bin("mcs".to_string());
+    let mut recorder_child = run_bin("recorder".to_string());
 
-     tokio::spawn(async move {
-         grpc_server::start_grpc_server().await.expect("TODO: panic message");
-     });
-     // wait for the mcs binary to start
-     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-
-     let (tx, rx) = std::sync::mpsc::channel::<TcpStream>();
-     let t0 = std::thread::spawn(|| {
-         start_tcp_server(tx);
-     });
-
-     let t1 = std::thread::spawn(|| {
-         test_ping();
-     });
-
-     let t2 = std::thread::spawn(|| {
-         test_split_mulaw();
-     });
-
-     let t3 = std::thread::spawn(|| {
-         test_mulaw();
-     });
-
-     let t4 = std::thread::spawn(|| {
-         test_mulaw_segment();
-     });
-
-     let t5 = std::thread::spawn(|| {
-         test_start_fail();
-     });
-
-     let t6 = std::thread::spawn(|| {
-         test_stop_fail();
-     });
+    tokio::spawn(async move {
+        grpc_server::start_grpc_server().await.expect("TODO: panic message");
+    });
+    // wait for the mcs binary to start
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
 
-     let t7 = std::thread::spawn(|| {
-         test_mulaw_send_response_end();
-         test_mulaw_dialog_end();
-         test_mulaw_send_event();
-         test_mulaw_send_audio();
-     });
+    let (tx, rx) = std::sync::mpsc::channel::<TcpStream>();
+    let t0 = std::thread::spawn(|| {
+        start_tcp_server(tx);
+    });
+
+    let t1 = std::thread::spawn(|| {
+        test_ping();
+    });
+
+    let t2 = std::thread::spawn(|| {
+        test_split_mulaw();
+    });
+
+    let t3 = std::thread::spawn(|| {
+        test_mulaw();
+    });
+
+    let t4 = std::thread::spawn(|| {
+        test_mulaw_segment();
+    });
+
+    let t5 = std::thread::spawn(|| {
+        test_start_fail();
+    });
+
+    let t6 = std::thread::spawn(|| {
+        test_stop_fail();
+    });
 
 
-     if let Err(e) = t1.join() {
-         error!("Failed on T1 {:?}",  e);
-         mcs_child.kill().expect("failed to terminate mcs");
-         recorder_child.kill().expect("failed to terminate recorder");
-         panic!("{:?}", e);
-     }
-     if let Err(e) = t2.join() {
-         error!("Failed on T2 {:?}",  e);
-         mcs_child.kill().expect("failed to terminate mcs");
-         recorder_child.kill().expect("failed to terminate recorder");
-         panic!("{:?}", e);
-     }
-
-     if let Err(e) = t3.join() {
-         error!("Failed on T3 {:?}",  e);
-         mcs_child.kill().expect("failed to terminate mcs");
-         recorder_child.kill().expect("failed to terminate recorder");
-         panic!("{:?}", e);
-     }
-
-     if let Err(e) = t4.join() {
-         error!("Failed on T4 {:?}",  e);
-         mcs_child.kill().expect("failed to terminate mcs");
-         recorder_child.kill().expect("failed to terminate recorder");
-         panic!("{:?}", e);
-     }
-
-     if let Err(e) = t5.join() {
-         error!("Failed on T5 {:?}",  e);
-         mcs_child.kill().expect("failed to terminate mcs");
-         recorder_child.kill().expect("failed to terminate recorder");
-         panic!("{:?}", e);
-     }
-
-     if let Err(e) = t6.join() {
-         error!("Failed on T6 {:?}",  e);
-         mcs_child.kill().expect("failed to terminate mcs");
-         recorder_child.kill().expect("failed to terminate recorder");
-         panic!("{:?}", e);
-     }
+    let t7 = std::thread::spawn(|| {
+        test_mulaw_send_response_end();
+        test_mulaw_dialog_end();
+        test_mulaw_send_event();
+        test_mulaw_send_audio();
+    });
 
 
-     if let Err(e) = t7.join() {
-         error!("Failed on T7 {:?}",  e);
-         mcs_child.kill().expect("failed to terminate mcs");
-         recorder_child.kill().expect("failed to terminate recorder");
-         panic!("{:?}", e);
-     }
+    if let Err(e) = t1.join() {
+        error!("Failed on T1 {:?}",  e);
+        mcs_child.kill().expect("failed to terminate mcs");
+        recorder_child.kill().expect("failed to terminate recorder");
+        panic!("{:?}", e);
+    }
+    if let Err(e) = t2.join() {
+        error!("Failed on T2 {:?}",  e);
+        mcs_child.kill().expect("failed to terminate mcs");
+        recorder_child.kill().expect("failed to terminate recorder");
+        panic!("{:?}", e);
+    }
 
-     if t0.is_finished() {
-         if let Err(e) = t0.join() {
-             error!("Failed on T0 {:?}", e);
-             mcs_child.kill().expect("failed to terminate mcs");
-             recorder_child.kill().expect("failed to terminate recorder");
-             panic!("{:?}", e);
-         }
-     } else {
-         // terminate the mcs and recorder binary
-         mcs_child.kill().expect("failed to terminate mcs");
-         recorder_child.kill().expect("failed to terminate recorder");
-         rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
-     }
+    if let Err(e) = t3.join() {
+        error!("Failed on T3 {:?}",  e);
+        mcs_child.kill().expect("failed to terminate mcs");
+        recorder_child.kill().expect("failed to terminate recorder");
+        panic!("{:?}", e);
+    }
 
+    if let Err(e) = t4.join() {
+        error!("Failed on T4 {:?}",  e);
+        mcs_child.kill().expect("failed to terminate mcs");
+        recorder_child.kill().expect("failed to terminate recorder");
+        panic!("{:?}", e);
+    }
+
+    if let Err(e) = t5.join() {
+        error!("Failed on T5 {:?}",  e);
+        mcs_child.kill().expect("failed to terminate mcs");
+        recorder_child.kill().expect("failed to terminate recorder");
+        panic!("{:?}", e);
+    }
+
+    if let Err(e) = t6.join() {
+        error!("Failed on T6 {:?}",  e);
+        mcs_child.kill().expect("failed to terminate mcs");
+        recorder_child.kill().expect("failed to terminate recorder");
+        panic!("{:?}", e);
+    }
+
+
+    if let Err(e) = t7.join() {
+        error!("Failed on T7 {:?}",  e);
+        mcs_child.kill().expect("failed to terminate mcs");
+        recorder_child.kill().expect("failed to terminate recorder");
+        panic!("{:?}", e);
+    }
+
+    if t0.is_finished() {
+        if let Err(e) = t0.join() {
+            error!("Failed on T0 {:?}", e);
+            mcs_child.kill().expect("failed to terminate mcs");
+            recorder_child.kill().expect("failed to terminate recorder");
+            panic!("{:?}", e);
+        }
+    } else {
+        // terminate the mcs and recorder binary
+        mcs_child.kill().expect("failed to terminate mcs");
+        recorder_child.kill().expect("failed to terminate recorder");
+        rx.recv().unwrap().shutdown(Shutdown::Both).unwrap();
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 10)]
 #[serial]
-async fn test() {
+async fn test_restart() {
+    info!("running restart test");
     let process = Arc::new(Mutex::new(Process {
         mcs: run_bin("mcs".to_string()),
         record: run_bin("recorder".to_string()),
