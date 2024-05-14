@@ -770,6 +770,7 @@ dependencies = [
  "sqlite",
  "stubborn-io",
  "tokio",
+ "tokio-util",
  "tonic",
  "tonic-build",
  "tracing",
