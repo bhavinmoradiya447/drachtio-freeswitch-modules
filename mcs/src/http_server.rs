@@ -34,6 +34,7 @@ use tonic::codegen::tokio_stream::{Stream, StreamExt};
 pub mod mcs {
     tonic::include_proto!("mcs");
 }
+use crate::metrics:: {ACTIVE_STREAMS,TOTAL_SUCCESSFUL_STREAMS, TOTAL_ERRORED_STREAMS, metrics_handler};
 
 use crate::mcs::media_cast_service_client::MediaCastServiceClient;
 use crate::mcs::DialogRequestPayloadType;
@@ -107,6 +108,8 @@ pub async fn start_http_server(
             }
             false => {
                 db_client_clone.delete_by_call_leg_and_client_address(call_detail.call_leg_id.clone(), call_detail.client_address.clone());
+                info!("ACTIVE_STREAMS-1");
+                ACTIVE_STREAMS.with_label_values(&[call_detail.client_address.clone().as_str()]).dec();
             }
         }
     }
@@ -145,15 +148,20 @@ pub async fn start_http_server(
         .and(warp::get())
         .and_then(ping_handler);
 
+    let metrics = warp::path!("metrics")
+        .and(warp::get())
+        .and_then(metrics_handler);
+
     let routes = init_open_api()
         .or(init_swagger_ui())
         .or(ping)
         .or(start_cast)
         .or(stop_cast)
         .or(stop_all)
-        .or(dispatch_event);
+        .or(dispatch_event)
+        .or(metrics);
 
-    info!("starting http server");
+    info!("starting http server----");
     warp::serve(routes).run(([127, 0, 0, 1], CONFIG.http_server.port)).await;
     Ok(())
 }
@@ -372,11 +380,17 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                 db_client_1.delete_by_call_leg_and_client_address(uuid.clone(), address.clone());
                                 let mut channels_ = channels_clone.lock().unwrap();
                                 channels_.uuid_sender_map.remove(uuid.as_str());
+                                info!("ACTIVE_STREAMS-1");
+                                ACTIVE_STREAMS.with_label_values(&[address.clone().as_str()]).dec();
                             }
                             break;
                         }
                     }
-                    Err(e) => {error!("Gor Error on receiver Stream {:?}", e)}
+                    Err(e) => {
+                        error!("Gor Error on receiver Stream {:?}", e);
+                        info!("TOTAL_ERRORED_STREAMS+1");
+                        TOTAL_ERRORED_STREAMS.with_label_values(&[address.clone().as_str()]).inc();
+                    }
                 }
             }
         };
@@ -399,6 +413,8 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                                                               "subscriber-error"))
                                 .expect("Failed to send start client error");
                             let mut retry_clone = retry_clone.lock().unwrap();
+                            info!("TOTAL_ERRORED_STREAMS+1");
+                            TOTAL_ERRORED_STREAMS.with_label_values(&[address_clone.as_str()]).inc();
                             retry_clone.retry_count = -1;
                         } else if is_first_message {
                             let mut data = metadata.as_str();
@@ -417,6 +433,9 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                     mode: mode_clone.clone(),
                                     metadata: metadata.clone(),
                                 });
+                                info!("ACTIVE_STREAMS+1 and TOTAL_SUCCESSFUL_STREAMS+1");
+                                ACTIVE_STREAMS.with_label_values(&[address_clone.as_str()]).inc();
+                                TOTAL_SUCCESSFUL_STREAMS.with_label_values(&[address_clone.as_str()]).inc();
                             }
                         }
                         is_first_message = false;
@@ -446,6 +465,8 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                                                                      metadata.as_str(),
                                                                      "connection-failed"))
                         .expect("Failed to send start failed event");
+                    info!("TOTAL_ERRORED_STREAMS+1");
+                    TOTAL_ERRORED_STREAMS.with_label_values(&[address_clone.as_str()]).inc();
                 }
             }
         };
@@ -737,13 +758,14 @@ impl<T> Drop for CastStreamWithRetry<T> {
         let http_client = self.http_client.clone();
 
         let result = http_client.is_call_leg_exist(self.uuid.clone());
-
+        let call_detail = db_client.select_by_call_id_and_address(self.uuid.clone(), self.address.clone());
+        info!("retry_count is {} and result is {}", retry_count, result);
         if retry_count != -1 && retry_count <= MAX_RETRY && result {
             let duration = u64::pow(2, retry_count as u32) * RETRY_DELAY;
             sleep(Duration::from_millis(duration));
             info!("Retrying call leg {} for address {} , {} times", self.uuid.clone(), self.address.clone(), retry_count);
 
-            if let Ok(_) = db_client.select_by_call_id_and_address(self.uuid.clone(), self.address.clone()) {
+            if call_detail.is_ok() {
                 start_cast(self.channels.clone(), self.address_client.clone(), self.event_sender.clone(), self.db_client.clone(),
                            self.uuid.clone(), self.address.clone(), self.codec.clone(),
                            self.mode.clone(), self.metadata.clone(), false, self.retry.clone(),
@@ -756,10 +778,12 @@ impl<T> Drop for CastStreamWithRetry<T> {
                            self.http_client.clone(),
                 );
             }
-        } else {
+        } else if call_detail.is_ok() {
             info!("Ignoring as retry exceeded or call got hangup");
             let db_client = self.db_client.clone();
             db_client.delete_by_call_leg_and_client_address(self.uuid.clone(), self.address.clone());
+            info!("ACTIVE_STREAMS-1");
+            ACTIVE_STREAMS.with_label_values(&[self.address.clone().as_str()]).dec();
         }
     }
 }

@@ -9,6 +9,7 @@ mod udp_server;
 mod fs_tcp_client;
 mod db_client;
 mod http_client;
+mod metrics;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -22,6 +23,7 @@ use crate::udp_server::start_udp_server;
 use lazy_static::lazy_static;
 use crate::db_client::DbClient;
 use crate::fs_tcp_client::start_fs_esl_client;
+use crate::metrics::register_custom_metrics;
 
 lazy_static! {
     static ref CONFIG: settings::Settings =
@@ -74,6 +76,7 @@ struct UuidChannels {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_log();
     info!("starting mcs server");
+    register_custom_metrics().await;
     let channels = Arc::new(Mutex::new(UuidChannels::default()));
     let (event_publisher, event_receiver) = tokio::sync::mpsc::unbounded_channel::<String>();
     let db_client = DbClient::new();
@@ -97,3 +100,4 @@ fn init_log() {
         logger.init();
     }
 }
+
