@@ -98,6 +98,7 @@ pub async fn start_http_server(
 
     let http_client = http_client_clone;
     for call_detail in call_details.iter() {
+        ACTIVE_STREAMS.with_label_values(&[call_detail.client_address.clone().as_str()]).inc();
         match http_client.is_call_leg_exist(call_detail.call_leg_id.clone()) {
             true => {
                 let retry = Arc::new(Mutex::new(Retry { retry_count: 0 }));
