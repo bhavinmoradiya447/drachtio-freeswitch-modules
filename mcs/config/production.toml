@@ -1,0 +1,24 @@
+[http_server]
+port = "3030"
+url = "http://localhost:3030"
+token_file = "/usr/local/token.txt"
+grpc_connection_pool = 20
+tls_cert_file= "/etc/ssl/certs/IdenTrust_Commercial_Root_CA_1.pem"
+
+
+[log]
+level = "info"
+appender = "console"
+log_dir = "/usr/local/mcs/log"
+log_prefix = "mcs.log"
+
+[udp_server]
+socket_file = "/usr/local/mcs/mcs-ds.sock"
+
+[fs_esl_client]
+host = "127.0.0.1:8021"
+auth = "ClueCon"
+
+[fs_http_client]
+user_name = "freeswitch"
+password = "QrFdTKD3m$b799Pq"

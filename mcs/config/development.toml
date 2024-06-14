@@ -1,0 +1,18 @@
+
+[http_server]
+tls_cert_file= "none"
+
+[log]
+appender = "file"
+log_dir = "./target/log"
+
+[udp_server]
+socket_file = "/tmp/mcs.sock"
+
+[fs_esl_client]
+host = "127.0.0.1:8022"
+auth = "Lcqzoc4e!zk3C3!#"
+
+[fs_http_client]
+user_name = "freeswitch"
+password = "QrFdTKD3m$b799Pq"
