@@ -445,7 +445,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                         is_first_message = false;
                         if payload.payload_type == eval1(&DialogResponsePayloadType::ResponseEnd) {
                             info!("Got ResponseEnd for {}", uuid_clone.as_str());
-                            break;
+                            //break;
                         }
                         process_response_payload(uuid_clone.as_str(), address_clone.as_str(), &payload, event_sender1.clone());
                     }

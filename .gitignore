@@ -19,6 +19,8 @@
 # Fortran module files
 *.mod
 *.smod
+.idea
+
 
 # Compiled Static libraries
 *.lai
@@ -39,3 +41,4 @@ node_modules
 stubs/*
 
 mcs/target
+mcs/.idea
