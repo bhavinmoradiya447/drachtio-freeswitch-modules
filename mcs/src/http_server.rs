@@ -22,7 +22,7 @@ use std::path::Path;
 use std::pin::Pin;
 use std::task::{Context, Poll, ready};
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
@@ -34,7 +34,8 @@ use tonic::codegen::tokio_stream::{Stream, StreamExt};
 pub mod mcs {
     tonic::include_proto!("mcs");
 }
-use crate::metrics:: {ACTIVE_STREAMS,TOTAL_SUCCESSFUL_STREAMS, TOTAL_ERRORED_STREAMS, metrics_handler};
+
+use crate::metrics::{ACTIVE_STREAMS, TOTAL_SUCCESSFUL_STREAMS, TOTAL_ERRORED_STREAMS, metrics_handler, AUDIO_PAYLOAD_LATENCY};
 
 use crate::mcs::media_cast_service_client::MediaCastServiceClient;
 use crate::mcs::DialogRequestPayloadType;
@@ -170,22 +171,22 @@ pub async fn start_http_server(
 fn init_open_api() -> impl Filter<Extract=(impl Reply, ), Error=warp::Rejection> + Clone {
     #[derive(OpenApi)]
     #[openapi(
-    paths(
-    crate::http_server::start_cast_handler,
-    crate::http_server::dispatch_event_handler,
-    crate::http_server::stop_cast_handler,
-    crate::http_server::stop_all_handler,
-    crate::http_server::ping_handler,
-    ),
-    components(
-    schemas(crate::http_server::StartCastRequest,
-    crate::http_server::DispatchEventRequest,
-    crate::http_server::StopCastRequest,
-    ),
-    ),
-    tags(
-    (name = "MCS API", description = "Multi Cast Streamer API")
-    )
+        paths(
+            crate::http_server::start_cast_handler,
+            crate::http_server::dispatch_event_handler,
+            crate::http_server::stop_cast_handler,
+            crate::http_server::stop_all_handler,
+            crate::http_server::ping_handler,
+        ),
+        components(
+            schemas(crate::http_server::StartCastRequest,
+                crate::http_server::DispatchEventRequest,
+                crate::http_server::StopCastRequest,
+            ),
+        ),
+        tags(
+            (name = "MCS API", description = "Multi Cast Streamer API")
+        )
     )]
     struct ApiDoc;
 
@@ -277,7 +278,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
     let mode_clone = mode.clone();
     let uuid_clone = uuid.clone();
     let address_clone = address.clone();
-    let group = (count  % CONFIG.http_server.grpc_connection_pool as u64) as usize;
+    let group = (count % CONFIG.http_server.grpc_connection_pool as u64) as usize;
     let address_key = format!("{}-{}", address, group);
     let address_uri = Uri::try_from(&address).unwrap();
     let address_client_clone = address_client.clone();
@@ -291,7 +292,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                 address, group
             );
             let grpc_channel = if address_uri.scheme_str().get_or_insert("http") == &"https"
-            && Path::new(CONFIG.http_server.tls_cert_file.as_str()).exists() {
+                && Path::new(CONFIG.http_server.tls_cert_file.as_str()).exists() {
                 let pem = std::fs::read_to_string(CONFIG.http_server.tls_cert_file.as_str()).unwrap();
                 let ca = Certificate::from_pem(pem);
 
@@ -371,6 +372,11 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                         if payload_type == eval(&DialogRequestPayloadType::AudioCombined)
                         ||  payload_type == eval(&DialogRequestPayloadType::AudioSplit){
                             info!("Sending audio content {}, timestamp {}", uuid.as_str(), addr_payload.payload.timestamp);
+                            let current_time = SystemTime::now()
+                            .duration_since(UNIX_EPOCH).expect("Time went backwards").as_millis();
+                            AUDIO_PAYLOAD_LATENCY
+                            .with_label_values(&[address.clone().as_str()])
+                            .observe((current_time - addr_payload.payload.timestamp as u128) as f64);
                         }
                         yield addr_payload.payload;
                         if payload_type == eval(&DialogRequestPayloadType::AudioEnd)
@@ -407,7 +413,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                 let retry_clone = retry_clone_2.clone();
                 tokio::spawn(async move {
                     let mut is_first_message = true;
-
+                    let mut is_response_end_received = false;
                     let mut response = response.into_inner();
                     while let Some(payload) = response.message().await.unwrap() {
                         if is_first_message && payload.payload_type == eval1(&DialogResponsePayloadType::DialogEnd) {
@@ -420,6 +426,9 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                             let mut retry_clone = retry_clone.lock().unwrap();
                             TOTAL_ERRORED_STREAMS.with_label_values(&[address_clone.as_str()]).inc();
                             retry_clone.retry_count = STOP_RETRY;
+                            break;
+                        } else if is_response_end_received {
+                            info!("Ignoring payload with type {} , as RESPONSE_END already Received", payload.payload_type)
                         } else if is_first_message {
                             let mut data = metadata.as_str();
                             if payload.payload_type == eval1(&DialogResponsePayloadType::DialogStart) {
@@ -445,7 +454,7 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                         is_first_message = false;
                         if payload.payload_type == eval1(&DialogResponsePayloadType::ResponseEnd) {
                             info!("Got ResponseEnd for {}", uuid_clone.as_str());
-                            //break;
+                            is_response_end_received = true;
                         }
                         process_response_payload(uuid_clone.as_str(), address_clone.as_str(), &payload, event_sender1.clone());
                     }
@@ -745,7 +754,7 @@ impl<T: 'static + Clone + Send> Stream for CastStreamWithRetry<T> {
             Err(RecvError::Closed) => {
                 info!("RecvError::Closed");
                 Poll::Ready(None)
-            },
+            }
             Err(RecvError::Lagged(n)) => {
                 info!("RecvError::Lagged {}", n);
                 Poll::Ready(Some(Err(BroadcastStreamRecvError::Lagged(n))))
@@ -792,7 +801,6 @@ impl<T> Drop for CastStreamWithRetry<T> {
             db_client.delete_by_call_leg_and_client_address(self.uuid.clone(), self.address.clone());
             ACTIVE_STREAMS.with_label_values(&[self.address.clone().as_str()]).dec();
         } else {
-            sleep(Duration::from_millis(500));
             info!("Ignoring as retry exceeded or call got hangup for {}", self.uuid.as_str());
         }
     }

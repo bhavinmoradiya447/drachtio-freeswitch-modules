@@ -1,6 +1,4 @@
-use prometheus::{
-    IntGaugeVec, IntCounterVec, Opts, Registry, Encoder
-};
+use prometheus::{IntGaugeVec, IntCounterVec, Opts, Registry, Encoder, HistogramOpts, HistogramVec};
 use warp::Reply;
 use warp::Rejection;
 use lazy_static::lazy_static;
@@ -18,6 +16,12 @@ lazy_static! {
     pub static ref TOTAL_ERRORED_STREAMS: IntCounterVec =
     IntCounterVec::new(Opts::new("TOTAL_ERRORED_STREAMS", "Total Errored Streams"), &["client_address"]).expect("metric cannot be created");
 
+
+    pub static ref AUDIO_PAYLOAD_LATENCY: HistogramVec = HistogramVec::new(
+        HistogramOpts::new("audio_payload_latency", "Audio payload latency").buckets(vec![100f64, 500f64, 1000f64, 3000f64, 5000f64, 10000f64]),
+        &["client_address"],
+    ).unwrap();
+
 }
 
 pub async fn register_metrics() {
@@ -31,6 +35,10 @@ pub async fn register_metrics() {
 
     REGISTRY
         .register(Box::new(TOTAL_ERRORED_STREAMS.clone()))
+        .expect("collector cannot be registered");
+
+    REGISTRY
+        .register(Box::new(AUDIO_PAYLOAD_LATENCY.clone()))
         .expect("collector cannot be registered");
 }
 
