@@ -23,12 +23,14 @@ use std::pin::Pin;
 use std::task::{Context, Poll, ready};
 use std::thread::sleep;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use serde_json::Value;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio_util::sync::ReusableBoxFuture;
 use tonic::Code::{Aborted, Cancelled, FailedPrecondition, InvalidArgument, PermissionDenied, Unauthenticated, Unimplemented};
 use tonic::codegen::tokio_stream::{Stream, StreamExt};
+use uuid::Uuid;
 
 
 pub mod mcs {
@@ -63,6 +65,8 @@ impl tonic::service::Interceptor for TokenInterceptor {
             let bearer_token = format!("Bearer {}", token);
             request.metadata_mut().insert("authorization", bearer_token.parse().unwrap());
         }
+        let is_canary = std::env::var("IS_CANARY").unwrap_or_else(|_| "false".into());
+        request.metadata_mut().insert("is-canary", is_canary.parse().unwrap());
         Ok(request)
     }
 }
@@ -164,7 +168,7 @@ pub async fn start_http_server(
         .or(metrics);
 
     info!("starting http server");
-    warp::serve(routes).run(([127, 0, 0, 1], CONFIG.http_server.port)).await;
+    warp::serve(routes).run(([0, 0, 0, 0], CONFIG.http_server.port)).await;
     Ok(())
 }
 
@@ -371,7 +375,6 @@ fn start_cast(channels: Arc<Mutex<UuidChannels>>, address_client: Arc<Mutex<Addr
                         }
                         if payload_type == eval(&DialogRequestPayloadType::AudioCombined)
                         ||  payload_type == eval(&DialogRequestPayloadType::AudioSplit){
-                            info!("Sending audio content {}, timestamp {}", uuid.as_str(), addr_payload.payload.timestamp);
                             let current_time = SystemTime::now()
                             .duration_since(UNIX_EPOCH).expect("Time went backwards").as_millis();
                             AUDIO_PAYLOAD_LATENCY
@@ -511,7 +514,17 @@ fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponseP
         if !Path::new(dir.as_str()).exists() {
             fs::create_dir(dir).unwrap();
         }
-        let file_path = format!("/tmp/{}/{}.wav", uuid, payload.data);
+        let mut file_name = format!("{}", Uuid::new_v4());
+        let mut action: String = "play_audio".parse().unwrap();
+        match serde_json::from_str::<Value>(payload.data.as_str()) {
+            Ok(value) => {
+                file_name = value["file_name"].to_string();
+                action = value["action"].to_string();
+            }
+            Err(e) => error!("Invalid audio chunk payload data for uuid: {}, error = {:?}", uuid.clone(), e )
+        }
+
+        let file_path = format!("/tmp/{}/{}.wav", uuid, file_name);
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
@@ -527,7 +540,7 @@ fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponseP
             if let Err(e) = file.flush() {
                 error!("failed to flush file for uuid {};  error = {:?}", uuid, e);
             }
-            let payload = format!("{{\"file_path\":\"{}\"}}", file_path);
+            let payload = format!("{{\"file_path\":\"{}\",\"action\":\"{}\"}}", file_path, action);
             event_sender.send(get_event_command(uuid, address, "subscriber-playback", payload.as_str()))
                 .expect("Failed to send client event");
         }
