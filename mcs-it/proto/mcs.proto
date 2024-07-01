@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package mcs;
+
+service MediaCastService {
+    rpc Dialog (stream DialogRequestPayload) returns (stream DialogResponsePayload);
+}
+
+enum DialogRequestPayloadType {
+    AUDIO_COMBINED = 0;
+    AUDIO_SPLIT = 1;
+    AUDIO_START = 2;
+    AUDIO_STOP = 3;
+    AUDIO_END = 4;
+    EVENT_DATA = 5;
+}
+
+message  DialogRequestPayload {
+    string uuid = 1; // call leg id
+    DialogRequestPayloadType payload_type = 2; // type of payload
+    uint64 timestamp = 3; // time stamp when audio was captured
+    bytes audio = 4; // audio bytes, in combined stereo format
+    bytes audio_left = 5; // audio bytes, left channel
+    bytes audio_right = 6; // audio bytes, right channel
+    string event_data = 7; // event metadata
+}
+
+enum DialogResponsePayloadType {
+    EVENT = 0; // DialogResponse has event data
+    AUDIO_CHUNK = 1; // DialogResponse has audio chunk
+    END_OF_AUDIO = 2; // all audio chunks sent
+    DIALOG_END = 3; // end of dialog, event_data may contain message with cause
+    RESPONSE_END = 4; // end of response stream
+    DIALOG_START = 5; // start of dialog, data may contain message, server should send this to ack.
+}
+
+message DialogResponsePayload {
+    DialogResponsePayloadType payload_type = 1;
+    string data = 2; // multiple purposes, like error message, event data, etc
+    bytes audio = 3; // audio chunk
+}

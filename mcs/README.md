@@ -82,7 +82,14 @@ message DialogResponsePayload {
 * Subscriber can send below Response payload if it ack AUDIO_START request with DIALOG_START 
   * Response Payload type as EVENT when Subscriber want to send some events (in data field) back to MCS/MediaServer. 
   *  Response Payload type as AUDIO_CHUNK when Subscriber want to send Aduio file to MCS/Media Server. 
-     * Payload type must be AUDIO_CHUNK and audio field should contains audio bytes and data field should contains filename. 
-     * Once Done sending Audio byte, Subscriber must send Payload with type END_OF_AUDIO and data field should contains filename and should not contains aduio bytes(if you send as part of END_OF_AUDIO, it will get ignore).
+     * Payload type must be AUDIO_CHUNK and audio field should contains audio bytes and data field with below json payload. 
+     * Once Done sending Audio byte, Subscriber must send Payload with type END_OF_AUDIO and data  with below json payload and should not contains aduio bytes(if you send as part of END_OF_AUDIO, it will get ignore).
+     ```
+     {
+      "file_name": "<Name of file without extenstion>"
+      "action" : "<Action for above file that get send to ras as part of event>"
+      "meta_data" : "<meta_data for above file/action as json string>"
+     }
+     ```
      
 Note: Subscriber is GRPC Server to which MCS stream dialog. 

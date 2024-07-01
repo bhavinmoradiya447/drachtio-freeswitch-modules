@@ -23,6 +23,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll, ready};
 use std::thread::sleep;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::error::RecvError;
@@ -504,6 +505,11 @@ fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponseP
     // write payload.audio to file
     // close file
     // log error on failure
+    #[derive(Serialize, Deserialize)]
+    struct Data {
+        file_name: String,
+        action: String,
+    }
 
     if payload.payload_type == eval1(&DialogResponsePayloadType::Event) {
         event_sender.send(get_event_command(uuid, address, "subscriber-event", payload.data.as_str()))
@@ -516,12 +522,14 @@ fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponseP
         }
         let mut file_name = format!("{}", Uuid::new_v4());
         let mut action: String = "play_audio".parse().unwrap();
-        match serde_json::from_str::<Value>(payload.data.as_str()) {
+        let mut metadata: String = "".parse().unwrap();
+        match serde_json::from_str::<Data>(payload.data.as_str()) {
             Ok(value) => {
-                file_name = value["file_name"].to_string();
-                action = value["action"].to_string();
+                file_name = value.file_name;
+                action = value.action;
+                metadata = serde_json::from_str::<Value>(payload.data.as_str()).unwrap()["meta_data"].to_string();
             }
-            Err(e) => error!("Invalid audio chunk payload data for uuid: {}, error = {:?}", uuid.clone(), e )
+            Err(e) => error!("Invalid audio chunk payload data for uuid: {}, error = {:?}", uuid, e )
         }
 
         let file_path = format!("/tmp/{}/{}.wav", uuid, file_name);
@@ -540,7 +548,7 @@ fn process_response_payload(uuid: &str, address: &str, payload: &DialogResponseP
             if let Err(e) = file.flush() {
                 error!("failed to flush file for uuid {};  error = {:?}", uuid, e);
             }
-            let payload = format!("{{\"file_path\":\"{}\",\"action\":\"{}\"}}", file_path, action);
+            let payload = format!("{{\"file_path\":\"{}\",\"action\":\"{}\",\"meta_data\":{}}}", file_path, action, metadata);
             event_sender.send(get_event_command(uuid, address, "subscriber-playback", payload.as_str()))
                 .expect("Failed to send client event");
         }
